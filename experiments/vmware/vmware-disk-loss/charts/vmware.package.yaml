@@ -1,0 +1,5 @@
+packageName: vmware
+experiments:
+  - name: vmware-disk-loss
+    CSV: vmware-disk-loss.chartserviceversion.yaml
+    desc: "vmware-disk-loss"

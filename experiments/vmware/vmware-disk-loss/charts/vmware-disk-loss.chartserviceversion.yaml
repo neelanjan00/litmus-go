@@ -1,0 +1,34 @@
+apiVersion: litmuchaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: vmware-disk-loss 
+  version: 0.1.0
+  annotations:
+    categories: vmware
+spec:
+  displayName: vmware-disk-loss 
+  categoryDescription: >
+    VMWare Disk Loss experiment causes the detachment of Virtual Disks attached to a VM for a specified duration of time and later attaches them back to the VM. 
+  keywords: 
+    - "disk" 
+    - "non-kubernetes" 
+    - "vmware"
+  platforms: 
+    - "VMWare"
+  maturity: alpha
+  maintainers: 
+    - name: neelanjan00 
+      email: neelanjan@chaosnative.com 
+  minKubeVersion: 1.12.0 
+  provider: 
+    name: ChaosNative
+  labels:
+    app.kubernetes.io/component: chartserviceversion
+    app.kubernetes.io/version: latest
+  links: 
+    - name: Documentation 
+      url: https://docs.litmuschaos.io/docs/getstarted/ 
+  icon:
+    - url: 
+      mediatype: ""
+  chaosexpcrdlink: https://raw.githubusercontent.com/litmuschaos/chaos-charts/master/charts/vmware/vmware-disk-loss/experiment.yaml
