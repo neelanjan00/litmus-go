@@ -99,11 +99,6 @@ func DiskAttach(vcenterServer, appVMMoid, diskPath, cookie string) error {
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse ErrorResponse
 
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			errors.Errorf(err.Error())
-		}
-
 		json.Unmarshal(body, &errorResponse)
 
 		return errors.Errorf("error during disk attachment: %s", errorResponse.MsgValue.MsgMessages[0].MsgDefaultMessage)
@@ -118,4 +113,53 @@ func DiskAttach(vcenterServer, appVMMoid, diskPath, cookie string) error {
 	})
 
 	return nil
+}
+
+// GetDiskPath returns the path of the VMDK disk file for a given disk id
+func GetDiskPath(vcenterServer, appVMMoid, diskId, cookie string) (string, error) {
+
+	type DiskInfo struct {
+		MsgValue struct {
+			MsgBacking struct {
+				MsgVMDKFile string `json:"vmdk_file"`
+			} `json:"backing"`
+		} `json:"value"`
+	}
+
+	req, err := http.NewRequest("GET", "https://"+vcenterServer+"/rest/vcenter/vm/"+appVMMoid+"/hardware/disk/"+diskId, nil)
+	if err != nil {
+		return "", errors.Errorf(err.Error())
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cookie", cookie)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	client := &http.Client{Transport: tr}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", errors.Errorf(err.Error())
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", errors.Errorf(err.Error())
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errorResponse ErrorResponse
+
+		json.Unmarshal(body, &errorResponse)
+
+		return "", errors.Errorf("error during disk information fetch: %s", errorResponse.MsgValue.MsgMessages[0].MsgDefaultMessage)
+	}
+
+	var diskInfo DiskInfo
+	json.Unmarshal(body, &diskInfo)
+
+	return diskInfo.MsgValue.MsgBacking.MsgVMDKFile, nil
 }

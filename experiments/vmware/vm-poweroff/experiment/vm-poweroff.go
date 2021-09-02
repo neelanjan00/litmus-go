@@ -71,7 +71,7 @@ func VMPoweroff(clients clients.ClientSets) {
 	go common.AbortWatcherWithoutExit(experimentsDetails.ExperimentName, clients, &resultDetails, &chaosDetails, &eventsDetails)
 
 	// GET SESSION ID TO LOGIN TO VCENTER
-	cookie, err := vmwarelib.GetVcenterSessionID(&experimentsDetails)
+	cookie, err := vmwarelib.GetVcenterSessionID(experimentsDetails.VcenterServer, experimentsDetails.VcenterUser, experimentsDetails.VcenterPass)
 	if err != nil {
 		failStep := "Unable to get Vcenter session ID"
 		result.RecordAfterFailure(&chaosDetails, &resultDetails, failStep, clients, &eventsDetails)

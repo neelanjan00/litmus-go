@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-
-	experimentTypes "github.com/litmuschaos/litmus-go/pkg/vmware/vm-poweroff/types"
 )
 
 // Message contains attribute for message
@@ -15,15 +13,15 @@ type Message struct {
 }
 
 //GetVcenterSessionID returns the vcenter sessionid
-func GetVcenterSessionID(experimentsDetails *experimentTypes.ExperimentDetails) (string, error) {
+func GetVcenterSessionID(vcenterServer, vcenterUser, vcenterPass string) (string, error) {
 
 	//Leverage Go's HTTP Post function to make request
-	req, err := http.NewRequest("POST", "https://"+experimentsDetails.VcenterServer+"/rest/com/vmware/cis/session", nil)
+	req, err := http.NewRequest("POST", "https://"+vcenterServer+"/rest/com/vmware/cis/session", nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(experimentsDetails.VcenterUser, experimentsDetails.VcenterPass)
+	req.SetBasicAuth(vcenterUser, vcenterPass)
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}

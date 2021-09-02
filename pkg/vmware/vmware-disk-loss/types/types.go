@@ -9,6 +9,7 @@ type ExperimentDetails struct {
 	ExperimentName   string
 	EngineName       string
 	ChaosDuration    int
+	ChaosInterval    int
 	RampTime         int
 	ChaosLib         string
 	AppNS            string
@@ -20,7 +21,9 @@ type ExperimentDetails struct {
 	ChaosPodName     string
 	Timeout          int
 	Delay            int
-	AppVMMoid        string
+	Sequence         string
+	AppVMMoids       string
+	DiskIds          string
 	VcenterServer    string
 	VcenterUser      string
 	VcenterPass      string

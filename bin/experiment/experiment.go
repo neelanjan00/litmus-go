@@ -50,6 +50,7 @@ import (
 	ec2TerminateByID "github.com/litmuschaos/litmus-go/experiments/kube-aws/ec2-terminate-by-id/experiment"
 	ec2TerminateByTag "github.com/litmuschaos/litmus-go/experiments/kube-aws/ec2-terminate-by-tag/experiment"
 	vmpoweroff "github.com/litmuschaos/litmus-go/experiments/vmware/vm-poweroff/experiment"
+	vmwareDiskLoss "github.com/litmuschaos/litmus-go/experiments/vmware/vmware-disk-loss/experiment"
 
 	"github.com/litmuschaos/litmus-go/pkg/clients"
 	"github.com/litmuschaos/litmus-go/pkg/log"
@@ -160,6 +161,8 @@ func main() {
 		gcpVMInstanceStop.VMInstanceStop(clients)
 	case "redfish-node-restart":
 		redfishNodeRestart.NodeRestart(clients)
+	case "vmware-disk-loss":
+		vmwareDiskLoss.VMWareDiskLoss(clients)
 
 	default:
 		log.Errorf("Unsupported -name %v, please provide the correct value of -name args", *experimentName)
