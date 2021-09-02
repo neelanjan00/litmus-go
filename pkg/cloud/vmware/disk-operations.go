@@ -21,8 +21,8 @@ type ErrorResponse struct {
 	} `json:"value"`
 }
 
-// VirtualDiskDetach will detach a virtual disk from a VM
-func VirtualDiskDetach(vcenterServer, appVMMoid, diskId, cookie string) error {
+// DiskDetach will detach a disk from a VM
+func DiskDetach(vcenterServer, appVMMoid, diskId, cookie string) error {
 
 	req, err := http.NewRequest("DELETE", "https://"+vcenterServer+"/rest/vcenter/vm/"+appVMMoid+"/hardware/disk/"+diskId, nil)
 	if err != nil {
@@ -64,8 +64,8 @@ func VirtualDiskDetach(vcenterServer, appVMMoid, diskId, cookie string) error {
 	return nil
 }
 
-// VirtualDiskAttach will attach a virtual disk to a VM
-func VirtualDiskAttach(vcenterServer, appVMMoid, diskPath, cookie string) error {
+// DiskAttach will attach a disk to a VM
+func DiskAttach(vcenterServer, appVMMoid, diskPath, cookie string) error {
 
 	type AttachDiskResponse struct {
 		MsgValue string `json:"value"`
