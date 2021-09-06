@@ -128,7 +128,7 @@ func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 
 			//Wait for disk detachment
 			log.Infof("[Wait]: Wait for disk volume detachment for volume %v", diskIdList[i])
-			if err = vmware.WaitForDiskDetachment(experimentsDetails.VcenterPass, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
+			if err = vmware.WaitForDiskDetachment(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
 				return errors.Errorf("unable to detach the disk from the vm, err: %v", err)
 			}
 
@@ -144,7 +144,7 @@ func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 			common.WaitForDuration(experimentsDetails.ChaosInterval)
 
 			//Getting the disk volume attachment status
-			diskState, err := vmware.GetDiskState(experimentsDetails.VcenterPass, appVMMoidList[i], diskIdList[i], cookie)
+			diskState, err := vmware.GetDiskState(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie)
 			if err != nil {
 				return errors.Errorf("failed to get the disk volume status, err: %v", err)
 			}
@@ -155,13 +155,13 @@ func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 			default:
 				//Attaching the disk to the vm
 				log.Info("[Chaos]: Attaching the disk volume back to the instance")
-				if err = vmware.DiskAttach(experimentsDetails.VcenterPass, appVMMoidList[i], diskPathList[i], cookie); err != nil {
+				if err = vmware.DiskAttach(experimentsDetails.VcenterServer, appVMMoidList[i], diskPathList[i], cookie); err != nil {
 					return errors.Errorf("disk attachment failed, err: %v", err)
 				}
 
 				//Wait for disk attachment
 				log.Infof("[Wait]: Wait for disk volume attachment for %v volume", diskIdList[i])
-				if err = vmware.WaitForDiskAttachment(experimentsDetails.VcenterPass, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
+				if err = vmware.WaitForDiskAttachment(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
 					return errors.Errorf("unable to attach the disk volume to the vm instance, err: %v", err)
 				}
 			}
@@ -202,7 +202,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 
 			//Wait for disk detachment
 			log.Infof("[Wait]: Wait for disk detachment for disk %v", diskIdList[i])
-			if err = vmware.WaitForDiskDetachment(experimentsDetails.VcenterPass, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
+			if err = vmware.WaitForDiskDetachment(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
 				return errors.Errorf("unable to detach the disk from the vm, err: %v", err)
 			}
 		}
@@ -221,7 +221,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 		for i := range diskIdList {
 
 			//Getting the disk attachment status
-			diskState, err := vmware.GetDiskState(experimentsDetails.VcenterPass, appVMMoidList[i], diskIdList[i], cookie)
+			diskState, err := vmware.GetDiskState(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie)
 			if err != nil {
 				return errors.Errorf("failed to get the disk status, err: %v", err)
 			}
@@ -238,7 +238,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 
 				//Wait for disk volume attachment
 				log.Infof("[Wait]: Wait for disk volume attachment for volume %v", diskIdList[i])
-				if err = vmware.WaitForDiskAttachment(experimentsDetails.VcenterPass, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
+				if err = vmware.WaitForDiskAttachment(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
 					return errors.Errorf("unable to attach the disk volume to the vm instance, err: %v", err)
 				}
 			}
@@ -259,7 +259,7 @@ func AbortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, appVMMo
 	for i := range diskIdList {
 
 		//Getting the disk volume attachment status
-		diskState, err := vmware.GetDiskState(experimentsDetails.VcenterPass, appVMMoidList[i], diskIdList[i], cookie)
+		diskState, err := vmware.GetDiskState(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie)
 		if err != nil {
 			log.Errorf("failed to get the disk state when an abort signal is received, err: %v", err)
 		}
@@ -270,7 +270,7 @@ func AbortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, appVMMo
 			//We first wait for the volume to get in detached state then we are attaching it.
 			log.Info("[Abort]: Wait for complete disk volume detachment")
 
-			if err = vmware.WaitForDiskDetachment(experimentsDetails.VcenterPass, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
+			if err = vmware.WaitForDiskDetachment(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
 				log.Errorf("unable to detach the disk volume, err: %v", err)
 			}
 
