@@ -112,14 +112,14 @@ func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 	for duration < experimentsDetails.ChaosDuration {
 
 		if experimentsDetails.EngineName != "" {
-			msg := "Injecting " + experimentsDetails.ExperimentName + " chaos on VM instance"
+			msg := "Injecting " + experimentsDetails.ExperimentName + " chaos on VM"
 			types.SetEngineEventAttributes(eventsDetails, types.ChaosInject, msg, "Normal", chaosDetails)
 			events.GenerateEvents(eventsDetails, clients, chaosDetails, "ChaosEngine")
 		}
 		for i := range diskIdList {
 
 			//Detaching the disk from the vm
-			log.Info("[Chaos]: Detaching the disk from the instance")
+			log.Info("[Chaos]: Detaching the disk from the VM")
 			if err = vmware.DiskDetach(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie); err != nil {
 				return errors.Errorf("disk detachment failed, err: %v", err)
 			}
@@ -154,7 +154,7 @@ func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 				log.Info("[Skip]: The disk is already attached")
 			default:
 				//Attaching the disk to the vm
-				log.Info("[Chaos]: Attaching the disk back to the instance")
+				log.Info("[Chaos]: Attaching the disk to the VM")
 				if err = vmware.DiskAttach(experimentsDetails.VcenterServer, appVMMoidList[i], diskPathList[i], cookie); err != nil {
 					return errors.Errorf("disk attachment failed, err: %v", err)
 				}
@@ -162,7 +162,7 @@ func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 				//Wait for disk attachment
 				log.Infof("[Wait]: Wait for disk attachment for disk %v", diskIdList[i])
 				if err = vmware.WaitForDiskAttachment(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
-					return errors.Errorf("unable to attach the disk to the vm instance, err: %v", err)
+					return errors.Errorf("unable to attach the disk to the vm, err: %v", err)
 				}
 			}
 			common.SetTargets(diskIdList[i], "reverted", "Disk", chaosDetails)
@@ -182,7 +182,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 	for duration < experimentsDetails.ChaosDuration {
 
 		if experimentsDetails.EngineName != "" {
-			msg := "Injecting " + experimentsDetails.ExperimentName + " chaos on vm instance"
+			msg := "Injecting " + experimentsDetails.ExperimentName + " chaos on vm"
 			types.SetEngineEventAttributes(eventsDetails, types.ChaosInject, msg, "Normal", chaosDetails)
 			events.GenerateEvents(eventsDetails, clients, chaosDetails, "ChaosEngine")
 		}
@@ -230,16 +230,16 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 			case "attached":
 				log.Info("[Skip]: The disk is already attached")
 			default:
-				//Attaching the disk to the instance
-				log.Info("[Chaos]: Attaching the disk to the instance")
-				if err = vmware.DiskDetach(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie); err != nil {
+				//Attaching the disk to the vm
+				log.Info("[Chaos]: Attaching the disk to the VM")
+				if err = vmware.DiskAttach(experimentsDetails.VcenterServer, appVMMoidList[i], diskPathList[i], cookie); err != nil {
 					return errors.Errorf("disk attachment failed, err: %v", err)
 				}
 
 				//Wait for disk attachment
 				log.Infof("[Wait]: Wait for disk attachment for disk %v", diskIdList[i])
 				if err = vmware.WaitForDiskAttachment(experimentsDetails.VcenterServer, appVMMoidList[i], diskIdList[i], cookie, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
-					return errors.Errorf("unable to attach the disk to the vm instance, err: %v", err)
+					return errors.Errorf("unable to attach the disk to the vm, err: %v", err)
 				}
 			}
 			common.SetTargets(diskIdList[i], "reverted", "Disk", chaosDetails)
@@ -274,8 +274,8 @@ func AbortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, appVMMo
 				log.Errorf("unable to detach the disk, err: %v", err)
 			}
 
-			//Attaching the disk from the instance
-			log.Info("[Chaos]: Attaching the disk from the instance")
+			//Attaching the disk to the VM
+			log.Info("[Chaos]: Attaching the disk to the VM")
 
 			err = vmware.DiskAttach(experimentsDetails.VcenterServer, appVMMoidList[i], diskPathList[i], cookie)
 			if err != nil {
