@@ -48,7 +48,7 @@ func DiskDetach(vcenterServer, appVMMoid, diskId, cookie string) error {
 
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			errors.Errorf(err.Error())
+			return errors.Errorf(err.Error())
 		}
 
 		json.Unmarshal(body, &errorResponse)

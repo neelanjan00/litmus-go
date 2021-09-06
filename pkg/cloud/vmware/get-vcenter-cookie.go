@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/pkg/errors"
 )
 
 // Message contains attribute for message
@@ -18,7 +20,7 @@ func GetVcenterSessionID(vcenterServer, vcenterUser, vcenterPass string) (string
 	//Leverage Go's HTTP Post function to make request
 	req, err := http.NewRequest("POST", "https://"+vcenterServer+"/rest/com/vmware/cis/session", nil)
 	if err != nil {
-		return "", err
+		return "", errors.Errorf(err.Error())
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(vcenterUser, vcenterPass)
@@ -30,16 +32,26 @@ func GetVcenterSessionID(vcenterServer, vcenterUser, vcenterPass string) (string
 	resp, err := client.Do(req)
 	//Handle Error
 	if err != nil {
-		return "", err
+		return "", errors.Errorf(err.Error())
 	}
+
 	defer resp.Body.Close()
-	//Read the response body
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", errors.Errorf(err.Error())
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errorResponse ErrorResponse
+
+		json.Unmarshal(body, &errorResponse)
+
+		return "", errors.Errorf("error during authentication: %s", errorResponse.MsgValue.MsgMessages[0].MsgDefaultMessage)
+	}
+
 	var m Message
-	json.Unmarshal([]byte(body), &m)
+	json.Unmarshal(body, &m)
 
 	login := "vmware-api-session-id=" + m.MsgValue + ";Path=/rest;Secure;HttpOnly"
 	return login, nil
