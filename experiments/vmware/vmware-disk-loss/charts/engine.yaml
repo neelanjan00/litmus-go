@@ -3,16 +3,9 @@ kind: ChaosEngine
 metadata:
   name: nginx-chaos
 spec:
-  appinfo:
-    appns: 'default'
-    applabel: 'app=nginx'
-    appkind: 'deployment'
-  # It can be active/stop
   engineState: 'active'
-  #ex. values: ns1:name=percona,ns2:run=nginx
   auxiliaryAppInfo: ''
   chaosServiceAccount: vmware-disk-loss-sa
-  # It can be delete/retain
   jobCleanUpPolicy: 'delete'
   experiments:
     - name: vmware-disk-loss
@@ -26,4 +19,11 @@ spec:
             # set chaos interval (in sec) as desired
             - name: CHAOS_INTERVAL
               value: '10'
-              
+
+            # provide disk ids as comma separated values
+            - name: VIRTUAL_DISK_IDS
+              value: ''
+
+            # provide vm moids as comma separated values for the corresponding disk ids
+            - name: APP_VM_MOIDS
+              value: ''

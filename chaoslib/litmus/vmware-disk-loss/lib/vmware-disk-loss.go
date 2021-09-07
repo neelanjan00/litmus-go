@@ -78,7 +78,7 @@ func PrepareDiskLoss(experimentsDetails *experimentTypes.ExperimentDetails, clie
 	default:
 
 		// watching for the abort signal and revert the chaos
-		go AbortWatcher(experimentsDetails, diskIdList, diskPathList, appVMMoidList, cookie, abort, chaosDetails)
+		go AbortWatcher(experimentsDetails, appVMMoidList, diskIdList, diskPathList, cookie, abort, chaosDetails)
 
 		switch strings.ToLower(experimentsDetails.Sequence) {
 		case "serial":

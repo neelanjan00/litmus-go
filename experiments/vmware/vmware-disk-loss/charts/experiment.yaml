@@ -12,32 +12,28 @@ metadata:
     app.kubernetes.io/version: latest
 spec:
   definition:
-    scope: Namespaced
+    scope: Cluster
     permissions:
       - apiGroups: 
           - "" 
           - "batch" 
-          - "apps" 
           - "litmuschaos.io"
         resources: 
           - "jobs" 
           - "pods" 
+          - "secrets"
           - "pods/log" 
-          - "events" 
-          - "deployments" 
-          - "replicasets" 
           - "pods/exec" 
           - "chaosengines" 
           - "chaosexperiments" 
           - "chaosresults"
         verbs: 
-          - "create" 
-          - "list" 
-          - "get" 
-          - "patch" 
-          - "update" 
-          - "delete" 
-          - "deletecollection"
+          - "create"
+          - "list"
+          - "get"
+          - "update"
+          - "patch"
+          - "delete"
     image: "litmuschaos/go-runner:latest"
     imagePullPolicy: Always
     args:
@@ -46,18 +42,52 @@ spec:
     command:
     - /bin/bash
     env:
+    - name: VCENTERSERVER
+      valueFrom:
+        secretKeyRef:
+          name: vcenter-secret
+          key: VCENTERSERVER
 
+    - name: VCENTERUSER
+      valueFrom:
+        secretKeyRef:
+          name: vcenter-secret
+          key: VCENTERUSER
+
+    - name: VCENTERPASS
+      valueFrom:
+        secretKeyRef:
+          name: vcenter-secret
+          key: VCENTERPASS
+
+    # set chaos duration (in sec) as desired 
     - name: TOTAL_CHAOS_DURATION
-      value: '' 
+      value: '30' 
 
+    # set chaos interval (in sec) as desired
     - name: CHAOS_INTERVAL
-      value: ''
+      value: '30'
 
+    # provide the LIB
+    # only litmus supported
     - name: LIB
-      value: ''
+      value: 'litmus'
 
+    # period to wait before and after injection of chaos in sec
     - name: RAMP_TIME
       value: ''
+
+    # provide disk ids as comma separated values
+    - name: VIRTUAL_DISK_IDS
+      value: ''
+    
+    # provide vm moids as comma separated values for the corresponding disk ids
+    - name: APP_VM_MOIDS
+      value: ''
+
+    # parallel or serial; determines how chaos is injected  
+    - name: SEQUENCE
+      value: 'parallel'
       
     labels:
       name: vmware-disk-loss

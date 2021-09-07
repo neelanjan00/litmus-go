@@ -145,13 +145,13 @@ func DiskStateCheck(vcenterServer, appVMMoids, diskIds, cookie string) error {
 
 	for i := range diskIdList {
 
-		volumeState, err := GetDiskState(vcenterServer, appVMMoidList[i], diskIdList[i], cookie)
+		diskState, err := GetDiskState(vcenterServer, appVMMoidList[i], diskIdList[i], cookie)
 
 		if err != nil {
-			return errors.Errorf("failed to get the disk volume %v in attached state, err: %v", diskIdList[i], err.Error())
+			return errors.Errorf("failed to get the disk %v in attached state, err: %v", diskIdList[i], err.Error())
 		}
 
-		if volumeState != "attached" {
+		if diskState != "attached" {
 			return errors.Errorf("%v disk state check failed, disk is in detached state", diskIdList[i])
 		}
 	}

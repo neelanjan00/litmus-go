@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Message contains attribute for message
 type Message struct {
 	MsgValue string `json:"value"`
 }
@@ -17,11 +16,11 @@ type Message struct {
 //GetVcenterSessionID returns the vcenter sessionid
 func GetVcenterSessionID(vcenterServer, vcenterUser, vcenterPass string) (string, error) {
 
-	//Leverage Go's HTTP Post function to make request
 	req, err := http.NewRequest("POST", "https://"+vcenterServer+"/rest/com/vmware/cis/session", nil)
 	if err != nil {
 		return "", errors.Errorf(err.Error())
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(vcenterUser, vcenterPass)
 	tr := &http.Transport{
@@ -30,7 +29,6 @@ func GetVcenterSessionID(vcenterServer, vcenterUser, vcenterPass string) (string
 
 	client := &http.Client{Transport: tr}
 	resp, err := client.Do(req)
-	//Handle Error
 	if err != nil {
 		return "", errors.Errorf(err.Error())
 	}

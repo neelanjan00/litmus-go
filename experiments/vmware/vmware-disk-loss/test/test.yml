@@ -33,8 +33,13 @@ spec:
           - name: APP_KIND
             value: '' 
 
+          # set chaos duration (in sec) as desired
           - name: TOTAL_CHAOS_DURATION
-            value: ''
+            value: '30'
+
+          # set chaos interval (in sec) as desired
+          - name: CHAOS_INTERVAL
+            value: '10'
 
           # provide auxiliary application details - namespace and labels of the applications
           # sample input is - "ns1:app=percona,ns2:name=nginx"
@@ -46,9 +51,8 @@ spec:
             value: ''
 
           ## env var that describes the library used to execute the chaos
-          ## default: litmus. Supported values: litmus, powerfulseal, chaoskube
           - name: LIB
-            value: ''
+            value: 'litmus'
 
           # provide the chaos namespace
           - name: CHAOS_NAMESPACE
@@ -63,4 +67,30 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: spec.serviceAccountName
+
+          - name: VCENTERSERVER
+            valueFrom:
+              secretKeyRef:
+                name: vcenter-secret
+                key: VCENTERSERVER
+
+          - name: VCENTERUSER
+            valueFrom:
+              secretKeyRef:
+                name: vcenter-secret
+                key: VCENTERUSER
+
+          - name: VCENTERPASS
+            valueFrom:
+              secretKeyRef:
+                name: vcenter-secret
+                key: VCENTERPASS
+
+          # provide disk ids as comma separated values
+          - name: VIRTUAL_DISK_IDS
+            value: ''
+
+          # provide vm moids as comma separated values for the corresponding disk ids
+          - name: APP_VM_MOIDS
+            value: ''          
 
