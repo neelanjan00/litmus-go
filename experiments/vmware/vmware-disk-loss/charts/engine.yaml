@@ -1,7 +1,7 @@
 apiVersion: litmuschaos.io/v1alpha1
 kind: ChaosEngine
 metadata:
-  name: nginx-chaos
+  name: vmware-disk-chaos
 spec:
   engineState: 'active'
   auxiliaryAppInfo: ''
@@ -18,7 +18,7 @@ spec:
 
             # set chaos interval (in sec) as desired
             - name: CHAOS_INTERVAL
-              value: '10'
+              value: '30'
 
             # provide disk ids as comma separated values
             - name: VIRTUAL_DISK_IDS
