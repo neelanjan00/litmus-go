@@ -3,7 +3,6 @@ package vmware
 import (
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -42,10 +41,10 @@ func GetHostDetails(vcenterServer, hostURL, cookie string) (string, string, stri
 
 	client := &http.Client{Transport: tr}
 	resp, err := client.Do(req)
-
 	if err != nil {
 		return "", "", "", err
 	}
+
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
@@ -55,9 +54,7 @@ func GetHostDetails(vcenterServer, hostURL, cookie string) (string, string, stri
 
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse ErrorResponse
-
 		json.Unmarshal(body, &errorResponse)
-
 		return "", "", "", errors.Errorf("error during the fetching of host details: %s", errorResponse.MsgValue.MsgMessages[0].MsgDefaultMessage)
 	}
 
@@ -67,8 +64,8 @@ func GetHostDetails(vcenterServer, hostURL, cookie string) (string, string, stri
 	return hostDetails.MsgValue[0].MsgHost, hostDetails.MsgValue[0].MsgConnectionState, hostDetails.MsgValue[0].MsgPowerState, nil
 }
 
-// GetPoweredOnVMDetails returns the details of the VMs that are in POWERED_ON and are attached to a given host
-func GetPoweredOnVMDetails(vcenterServer, host, cookie string) (string, error) {
+// GetPoweredOnVMDetails returns the VM ids that are in POWERED_ON state and are attached to a given host
+func GetPoweredOnVMDetails(vcenterServer, host, cookie string) ([]string, error) {
 
 	type VM struct {
 		MsgValue []struct {
@@ -78,7 +75,7 @@ func GetPoweredOnVMDetails(vcenterServer, host, cookie string) (string, error) {
 
 	req, err := http.NewRequest("GET", "https://"+vcenterServer+"/rest/vcenter/vm?filter.hosts.1="+host+"&filter.power_states.1=POWERED_ON", nil)
 	if err != nil {
-		fmt.Print(err.Error())
+		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -89,27 +86,30 @@ func GetPoweredOnVMDetails(vcenterServer, host, cookie string) (string, error) {
 
 	client := &http.Client{Transport: tr}
 	resp, err := client.Do(req)
-
 	if err != nil {
-		fmt.Print(err.Error())
+		return nil, err
 	}
+
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Print(err.Error())
+		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse ErrorResponse
-
 		json.Unmarshal(body, &errorResponse)
-
-		return "", errors.Errorf("error during the fetching of VM details: %s", errorResponse.MsgValue.MsgMessages[0].MsgDefaultMessage)
+		return nil, errors.Errorf("error during the fetching of VM details: %s", errorResponse.MsgValue.MsgMessages[0].MsgDefaultMessage)
 	}
 
 	var vmDetails VM
 	json.Unmarshal(body, &vmDetails)
 
-	return vmDetails.MsgValue[0].MsgVm, nil
+	var vmList []string
+	for _, vm := range vmDetails.MsgValue {
+		vmList = append(vmList, vm.MsgVm)
+	}
+
+	return vmList, nil
 }
