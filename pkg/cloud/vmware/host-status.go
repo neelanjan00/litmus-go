@@ -17,8 +17,8 @@ type ErrorResponse struct {
 	} `json:"value"`
 }
 
-// GetHostDetails returns the host id, host connection state, and host power state for a given host URL
-func GetHostDetails(vcenterServer, hostURL, cookie string) (string, string, string, error) {
+// GetHostDetails returns the host id, host connection state, and host power state for a given host name
+func GetHostDetails(vcenterServer, hostName, cookie string) (string, string, string, error) {
 
 	type Host struct {
 		MsgValue []struct {
@@ -28,7 +28,7 @@ func GetHostDetails(vcenterServer, hostURL, cookie string) (string, string, stri
 		} `json:"value"`
 	}
 
-	req, err := http.NewRequest("GET", "https://"+vcenterServer+"/rest/vcenter/host?filter.names.1="+hostURL, nil)
+	req, err := http.NewRequest("GET", "https://"+vcenterServer+"/rest/vcenter/host?filter.names.1="+hostName, nil)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -65,7 +65,7 @@ func GetHostDetails(vcenterServer, hostURL, cookie string) (string, string, stri
 }
 
 // GetPoweredOnVMDetails returns the VM ids that are in POWERED_ON state and are attached to a given host
-func GetPoweredOnVMDetails(vcenterServer, host, cookie string) ([]string, error) {
+func GetPoweredOnVMDetails(vcenterServer, hostId, cookie string) ([]string, error) {
 
 	type VM struct {
 		MsgValue []struct {
@@ -73,7 +73,7 @@ func GetPoweredOnVMDetails(vcenterServer, host, cookie string) ([]string, error)
 		} `json:"value"`
 	}
 
-	req, err := http.NewRequest("GET", "https://"+vcenterServer+"/rest/vcenter/vm?filter.hosts.1="+host+"&filter.power_states.1=POWERED_ON", nil)
+	req, err := http.NewRequest("GET", "https://"+vcenterServer+"/rest/vcenter/vm?filter.hosts.1="+hostId+"&filter.power_states.1=POWERED_ON", nil)
 	if err != nil {
 		return nil, err
 	}

@@ -5,13 +5,10 @@ import (
 
 	clientTypes "k8s.io/apimachinery/pkg/types"
 
-	experimentTypes "github.com/litmuschaos/litmus-go/pkg/vmware/vmware-host-reboot/types"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
+	experimentTypes "github.com/litmuschaos/litmus-go/pkg/vmware/vmware-host-reboot/types"
 )
-
-// STEPS TO GETENV OF YOUR CHOICE HERE
-// ADDED FOR FEW MANDATORY FIELD
 
 //GetENV fetches all the env variables from the runner pod
 func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
@@ -30,23 +27,16 @@ func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.ChaosPodName = common.Getenv("POD_NAME", "")
 	experimentDetails.Delay, _ = strconv.Atoi(common.Getenv("STATUS_CHECK_DELAY", "2"))
 	experimentDetails.Timeout, _ = strconv.Atoi(common.Getenv("STATUS_CHECK_TIMEOUT", "180"))
-	experimentDetails.ChaosInjectCmd = common.Getenv("CHAOS_INJECT_COMMAND", "")
-	experimentDetails.ChaosKillCmd = common.Getenv("CHAOS_KILL_COMMAND", "")
 	experimentDetails.TargetContainer = common.Getenv("TARGET_CONTAINER", "")
-	experimentDetails.TargetPods = common.Getenv("TARGET_PODS", "")
-	experimentDetails.PodsAffectedPerc, _ = strconv.Atoi(common.Getenv("PODS_AFFECTED_PERC", "0"))
+	experimentDetails.HostName = common.Getenv("HOST_NAME", "")
+	experimentDetails.HostDatacenter = common.Getenv("HOST_DATACENTER", "")
+	experimentDetails.VcenterServer = common.Getenv("VCENTERSERVER", "")
+	experimentDetails.VcenterUser = common.Getenv("VCENTERUSER", "")
+	experimentDetails.VcenterPass = common.Getenv("VCENTERPASS", "")
 }
 
 //InitialiseChaosVariables initialise all the global variables
 func InitialiseChaosVariables(chaosDetails *types.ChaosDetails, experimentDetails *experimentTypes.ExperimentDetails) {
-    appDetails := types.AppDetails{}
-	appDetails.AnnotationCheck, _ = strconv.ParseBool(common.Getenv("ANNOTATION_CHECK", "false"))
-	appDetails.AnnotationKey = common.Getenv("ANNOTATION_KEY", "litmuschaos.io/chaos")
-	appDetails.AnnotationValue = "true"
-	appDetails.Kind = experimentDetails.AppKind
-	appDetails.Label = experimentDetails.AppLabel
-	appDetails.Namespace = experimentDetails.AppNS
-
 	chaosDetails.ChaosNamespace = experimentDetails.ChaosNamespace
 	chaosDetails.ChaosPodName = experimentDetails.ChaosPodName
 	chaosDetails.ChaosUID = experimentDetails.ChaosUID
@@ -55,7 +45,4 @@ func InitialiseChaosVariables(chaosDetails *types.ChaosDetails, experimentDetail
 	chaosDetails.InstanceID = experimentDetails.InstanceID
 	chaosDetails.Timeout = experimentDetails.Timeout
 	chaosDetails.Delay = experimentDetails.Delay
-	chaosDetails.AppDetail = appDetails
-	chaosDetails.JobCleanupPolicy = common.Getenv("JOB_CLEANUP_POLICY", "retain")
-	chaosDetails.ProbeImagePullPolicy = experimentDetails.LIBImagePullPolicy
 }
