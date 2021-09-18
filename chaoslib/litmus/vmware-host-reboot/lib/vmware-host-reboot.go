@@ -1,139 +1,88 @@
 package lib
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
-
 	clients "github.com/litmuschaos/litmus-go/pkg/clients"
-	"github.com/litmuschaos/litmus-go/pkg/events"
+	"github.com/litmuschaos/litmus-go/pkg/cloud/vmware"
 	"github.com/litmuschaos/litmus-go/pkg/log"
-	experimentTypes "github.com/litmuschaos/litmus-go/pkg/vmware/vmware-host-reboot/types"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
-	litmusexec "github.com/litmuschaos/litmus-go/pkg/utils/exec"
+	experimentTypes "github.com/litmuschaos/litmus-go/pkg/vmware/vmware-host-reboot/types"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 )
 
-func injectChaos(experimentsDetails *experimentTypes.ExperimentDetails, podName string, clients clients.ClientSets) error {
-	// It will contains all the pod & container details required for exec command
-	execCommandDetails := litmusexec.PodDetails{}
-	command := []string{"/bin/sh", "-c", experimentsDetails.ChaosInjectCmd}
-	litmusexec.SetExecCommandAttributes(&execCommandDetails, podName, experimentsDetails.TargetContainer, experimentsDetails.AppNS)
-	_, err := litmusexec.Exec(&execCommandDetails, clients, command)
-	if err != nil {
-		return errors.Errorf("unable to run command inside target container, err: %v", err)
-	}
-	return nil
-}
+func PrepareChaos(experimentsDetails *experimentTypes.ExperimentDetails, hostId, cookie string, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
-func experimentExecution(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
-
-	// Get the target pod details for the chaos execution
-	// if the target pod is not defined it will derive the random target pod list using pod affected percentage
-	targetPodList, err := common.GetPodList(experimentsDetails.TargetPods, experimentsDetails.PodsAffectedPerc, clients, chaosDetails)
-	if err != nil {
-		return err
-	}
-
-	podNames := []string{}
-	for _, pod := range targetPodList.Items {
-		podNames = append(podNames, pod.Name)
-	}
-	log.Infof("Target pods list for chaos, %v", podNames)
-
-	//Get the target container name of the application pod
-	if experimentsDetails.TargetContainer == "" {
-		experimentsDetails.TargetContainer, err = common.GetTargetContainer(experimentsDetails.AppNS, targetPodList.Items[0].Name, clients)
-		if err != nil {
-			return errors.Errorf("unable to get the target container name, err: %v", err)
-		}
-	}
-
-	return runChaos(experimentsDetails, targetPodList, clients, resultDetails, eventsDetails, chaosDetails)
-}
-
-func runChaos(experimentsDetails *experimentTypes.ExperimentDetails, targetPodList corev1.PodList, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
-	var endTime <-chan time.Time
-	timeDelay := time.Duration(experimentsDetails.ChaosDuration) * time.Second
-
-	for _, pod := range targetPodList.Items {
-
-		if experimentsDetails.EngineName != "" {
-			msg := "Injecting " + experimentsDetails.ExperimentName + " chaos on " + pod.Name + " pod"
-			types.SetEngineEventAttributes(eventsDetails, types.ChaosInject, msg, "Normal", chaosDetails)
-			events.GenerateEvents(eventsDetails, clients, chaosDetails, "ChaosEngine")
-		}
-
-		log.InfoWithValues("[Chaos]: The Target application details", logrus.Fields{
-			"container": experimentsDetails.TargetContainer,
-			"Pod":       pod.Name,
-		})
-		
-		go injectChaos(experimentsDetails, pod.Name, clients)
-
-		log.Infof("[Chaos]:Waiting for: %vs", experimentsDetails.ChaosDuration)
-
-		// signChan channel is used to transmit signal notifications.
-		signChan := make(chan os.Signal, 1)
-		// Catch and relay certain signal(s) to signChan channel.
-		signal.Notify(signChan, os.Interrupt, syscall.SIGTERM)
-	loop:
-		for {
-			endTime = time.After(timeDelay)
-			select {
-			case <-signChan:
-				log.Info("[Chaos]: Revert Started")
-				if err := killChaos(experimentsDetails, pod.Name, clients);err != nil {
-						log.Error("unable to kill chaos process after receiving abortion signal")
-				}
-				log.Info("[Chaos]: Revert Completed")
-				os.Exit(1)
-			case <-endTime:
-				log.Infof("[Chaos]: Time is up for experiment: %v", experimentsDetails.ExperimentName)
-				endTime = nil
-				break loop
-			}
-		}
-		if err := killChaos(experimentsDetails, pod.Name, clients); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func PrepareChaos(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
+	VMDisks := make(map[string][]string)
 
 	//Waiting for the ramp time before chaos injection
 	if experimentsDetails.RampTime != 0 {
 		log.Infof("[Ramp]: Waiting for the %vs ramp time before injecting chaos", experimentsDetails.RampTime)
 		common.WaitForDuration(experimentsDetails.RampTime)
 	}
-	//Starting the CPU stress experiment
-	if err := experimentExecution(experimentsDetails, clients, resultDetails, eventsDetails, chaosDetails);err != nil {
-		return err
+
+	//Get the ids of the VMs that are attached to the host and are powered-on and powered-off or suspended
+	log.Infof("[Info]: Fetching the VMs attached to the host")
+	poweredOnVMList, poweredOffOrSuspendedVMList, err := vmware.GetVMDetails(experimentsDetails.VcenterServer, hostId, cookie)
+	if err != nil {
+		return errors.Errorf("failed to fetch the VM details: %s", err.Error())
 	}
+
+	//Get the disks attached to the VMs
+	log.Infof("[Info]: Fetching the disks attached to the VMs that are attached to the host")
+	for _, vmId := range append(poweredOnVMList, poweredOffOrSuspendedVMList...) {
+
+		diskIdList, err := vmware.GetDisks(experimentsDetails.VcenterServer, vmId, cookie)
+		if err != nil {
+			return errors.Errorf("failed to fetch the disk details for %s vm: %s", vmId, err.Error())
+		}
+
+		VMDisks[vmId] = diskIdList
+	}
+
+	//Reboot the host
+	log.Info("[Chaos]: Rebooting the ESX host")
+	vmware.RebootHost(experimentsDetails.HostName, experimentsDetails.HostDatacenter)
+
+	//Wait for the host to completely reboot
+	log.Info("[Wait]: Wait for the host to completely reboot")
+	if err := vmware.WaitForHostReboot(experimentsDetails.Timeout, experimentsDetails.Delay, experimentsDetails.VcenterServer, experimentsDetails.HostName, cookie); err != nil {
+		return errors.Errorf("host failed to successfully reboot: %s", err.Error())
+	}
+
+	//Power-on the VMs that were powered-on prior to the host reboot
+	for _, vmId := range poweredOnVMList {
+		log.Infof("[Info]: Starting the %s VM", vmId)
+		if err := vmware.StartVM(experimentsDetails.VcenterServer, vmId, cookie); err != nil {
+			return errors.Errorf("failed to start the %s vm, %s", vmId, err.Error())
+		}
+
+		log.Infof("[Wait]: Wait for the %s VM to start", vmId)
+		if err := vmware.WaitForVMStart(experimentsDetails.Timeout, experimentsDetails.Delay, experimentsDetails.VcenterServer, vmId, cookie); err != nil {
+			return errors.Errorf("%s vm failed to successfully start, %s", vmId, err.Error())
+		}
+	}
+
+	//Check if the disks are still attached to their respective VMs
+	for vmId, diskList := range VMDisks {
+		log.Infof("[Info]: Checking the attachment status of the disks of the %s vm", vmId)
+		for _, diskId := range diskList {
+
+			diskState, err := vmware.GetDiskState(experimentsDetails.VcenterServer, vmId, diskId, cookie)
+			if err != nil {
+				return errors.Errorf("failed to get the %s disk state for %s vm", diskId, vmId)
+			}
+
+			if diskState != "attached" {
+				return errors.Errorf("disk state is %s for disk %s of vm %s", diskState, diskId, vmId)
+			}
+		}
+	}
+
 	//Waiting for the ramp time after chaos injection
 	if experimentsDetails.RampTime != 0 {
 		log.Infof("[Ramp]: Waiting for the %vs ramp time after injecting chaos", experimentsDetails.RampTime)
 		common.WaitForDuration(experimentsDetails.RampTime)
 	}
-	return nil
-}
 
-func killChaos(experimentsDetails *experimentTypes.ExperimentDetails, podName string, clients clients.ClientSets) error {
-	// It will contains all the pod & container details required for exec command
-	execCommandDetails := litmusexec.PodDetails{}
-
-	command := []string{"/bin/sh", "-c", experimentsDetails.ChaosKillCmd}
-
-	litmusexec.SetExecCommandAttributes(&execCommandDetails, podName, experimentsDetails.TargetContainer, experimentsDetails.AppNS)
-	_, err := litmusexec.Exec(&execCommandDetails, clients, command)
-	if err != nil {
-		return errors.Errorf("unable to kill the process in %v pod, err: %v", podName, err)
-	}
 	return nil
 }

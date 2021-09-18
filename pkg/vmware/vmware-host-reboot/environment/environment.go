@@ -28,6 +28,7 @@ func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.Delay, _ = strconv.Atoi(common.Getenv("STATUS_CHECK_DELAY", "2"))
 	experimentDetails.Timeout, _ = strconv.Atoi(common.Getenv("STATUS_CHECK_TIMEOUT", "180"))
 	experimentDetails.TargetContainer = common.Getenv("TARGET_CONTAINER", "")
+	experimentDetails.AuxiliaryAppInfo = common.Getenv("AUXILIARY_APPINFO", "")
 	experimentDetails.HostName = common.Getenv("HOST_NAME", "")
 	experimentDetails.HostDatacenter = common.Getenv("HOST_DATACENTER", "")
 	experimentDetails.VcenterServer = common.Getenv("VCENTERSERVER", "")

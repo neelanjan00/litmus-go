@@ -6,23 +6,23 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	experimentTypes "github.com/litmuschaos/litmus-go/pkg/vmware/vm-poweroff/types"
+	"github.com/pkg/errors"
 )
 
 //GetVMStatus gets the current status of Vcenter VM
-func GetVMStatus(experimentsDetails *experimentTypes.ExperimentDetails, cookie string) (string, error) {
+func GetVMStatus(vcenterServer, vmId, cookie string) (string, error) {
 
-	type Message struct {
+	type VM struct {
 		MsgValue struct {
-			StateValue string `json:"state"`
+			MsgState string `json:"state"`
 		} `json:"value"`
 	}
 
-	//Leverage Go's HTTP Post function to make request
-	req, err := http.NewRequest("GET", "https://"+experimentsDetails.VcenterServer+"/rest/vcenter/vm/"+experimentsDetails.AppVMMoid+"/power/", nil)
+	req, err := http.NewRequest("GET", "https://"+vcenterServer+"/rest/vcenter/vm/"+vmId+"/power/", nil)
 	if err != nil {
 		return "", err
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cookie", cookie)
 	tr := &http.Transport{
@@ -31,17 +31,25 @@ func GetVMStatus(experimentsDetails *experimentTypes.ExperimentDetails, cookie s
 
 	client := &http.Client{Transport: tr}
 	resp, err := client.Do(req)
-	//Handle Error
 	if err != nil {
 		return "", err
 	}
+
 	defer resp.Body.Close()
-	//Read the response body
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
-	var m1 Message
-	json.Unmarshal([]byte(body), &m1)
-	return string(m1.MsgValue.StateValue), nil
+
+	if resp.StatusCode != http.StatusOK {
+		var errorResponse ErrorResponse
+		json.Unmarshal(body, &errorResponse)
+		return "", errors.Errorf("failed to fetch VM status: %s", errorResponse.MsgValue.MsgMessages[0].MsgDefaultMessage)
+	}
+
+	var vmDetails VM
+	json.Unmarshal(body, &vmDetails)
+
+	return vmDetails.MsgValue.MsgState, nil
 }

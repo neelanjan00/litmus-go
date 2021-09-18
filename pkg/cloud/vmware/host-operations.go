@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"time"
 
+	"github.com/litmuschaos/litmus-go/pkg/log"
+	"github.com/litmuschaos/litmus-go/pkg/utils/retry"
 	"github.com/pkg/errors"
 )
 
@@ -23,9 +26,9 @@ func shellout(command string) (string, string, error) {
 }
 
 // RebootHost causes a given host in a particular datacenter to reboot
-func RebootHost(hostURL, datacenter string) error {
+func RebootHost(hostName, datacenter string) error {
 
-	cmd := fmt.Sprintf("govc host.shutdown -r=true -f=true -dc=%s %s", datacenter, hostURL)
+	cmd := fmt.Sprintf("govc host.shutdown -r=true -f=true -dc=%s %s", datacenter, hostName)
 	_, stderr, err := shellout(cmd)
 
 	if err != nil {
@@ -35,4 +38,23 @@ func RebootHost(hostURL, datacenter string) error {
 	}
 
 	return nil
+}
+
+// WaitForHostReboot will wait for the host to attain the CONNECTED status
+func WaitForHostReboot(timeout, delay int, vcenterServer, hostName, cookie string) error {
+	log.Info("[Status]: Checking host connection status")
+	return retry.Times(uint(timeout / delay)).
+		Wait(time.Duration(delay) * time.Second).
+		Try(func(attempt uint) error {
+			hostState, err := GetHostConnectionStatus(vcenterServer, hostName, cookie)
+			if err != nil {
+				return errors.Errorf("failed to get the host connection status: %s", err.Error())
+			}
+			if hostState != "CONNECTED" {
+				log.Infof("The host connection state is %s", hostState)
+				return errors.Errorf("host is not yet in CONNECTED state")
+			}
+			log.Infof("The host connection state is %s", hostState)
+			return nil
+		})
 }

@@ -46,9 +46,7 @@ func GetDiskState(vcenterServer, vmId, diskId, cookie string) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse ErrorResponse
-
 		json.Unmarshal(body, &errorResponse)
-
 		return "", errors.Errorf("error during disk state fetch: %s", errorResponse.MsgValue.MsgMessages[0].MsgDefaultMessage)
 	}
 
