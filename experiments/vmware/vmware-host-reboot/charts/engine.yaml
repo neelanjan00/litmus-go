@@ -1,12 +1,8 @@
 apiVersion: litmuschaos.io/v1alpha1
 kind: ChaosEngine
 metadata:
-  name: nginx-chaos
+  name: vmware-host-chaos
 spec:
-  appinfo:
-    appns: 'default'
-    applabel: 'app=nginx'
-    appkind: 'deployment'
   # It can be active/stop
   engineState: 'active'
   #ex. values: ns1:name=percona,ns2:run=nginx
@@ -19,11 +15,10 @@ spec:
       spec:
         components:
           env:
-            # set chaos duration (in sec) as desired
-            - name: TOTAL_CHAOS_DURATION
-              value: '30'
+            # set the target host name
+            - name: HOST_NAME
+              value: ''
 
-            # set chaos interval (in sec) as desired
-            - name: CHAOS_INTERVAL
-              value: '10'
-              
+            # set the datacenter of the target host
+            - name: HOST_DATACENTER
+              value: ''

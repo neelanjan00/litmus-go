@@ -45,18 +45,38 @@ spec:
     command:
     - /bin/bash
     env:
+    
+    - name: VCENTERSERVER
+      valueFrom:
+        secretKeyRef:
+          name: vcenter-secret
+          key: VCENTERSERVER
 
-    - name: TOTAL_CHAOS_DURATION
-      value: '' 
+    - name: VCENTERUSER
+      valueFrom:
+        secretKeyRef:
+          name: vcenter-secret
+          key: VCENTERUSER
 
-    - name: CHAOS_INTERVAL
-      value: ''
+    - name: VCENTERPASS
+      valueFrom:
+        secretKeyRef:
+          name: vcenter-secret
+          key: VCENTERPASS
 
     - name: LIB
       value: ''
 
     - name: RAMP_TIME
       value: ''
+
+    # set the target host name
+    - name: HOST_NAME
+      value: ''
+
+    # set the datacenter of the target host
+    - name: HOST_DATACENTER
+      value: ''    
       
     labels:
       name: vmware-host-reboot
