@@ -76,7 +76,7 @@ RUN curl -L https://github.com/litmuschaos/test-tools/releases/download/1.13.6/p
 RUN curl -L https://github.com/litmuschaos/test-tools/releases/download/1.13.6/dns_interceptor --output /usr/local/bin/dns_interceptor && chmod +x /usr/local/bin/dns_interceptor
 
 #Installing govc cli binaries
-RUN curl -L https://github.com/vmware/govmomi/releases/download/v0.26.1/govc_Linux_x86_64.tar.gz --output ~/govc_Linux_x86_64.tar.gz && mkdir ~/govc && tar xf ~/govc_Linux_x86_64.tar.gz -C ~/govc && cp ~/govc/govc /usr/local/bin && rm -r ~/govc && rm ~/govc_Linux_x86_64.tar.gz && && chmod +x /usr/local/bin/govc
+RUN curl -L https://github.com/vmware/govmomi/releases/download/v0.26.1/govc_Linux_x86_64.tar.gz --output ~/govc_Linux_x86_64.tar.gz && mkdir ~/govc && tar xf ~/govc_Linux_x86_64.tar.gz -C ~/govc && cp ~/govc/govc /usr/local/bin && rm -r ~/govc && rm ~/govc_Linux_x86_64.tar.gz && chmod +x /usr/local/bin/govc
 
 COPY --from=docker:19.03 /usr/local/bin/docker /usr/local/bin/
 COPY --from=builder /output/ /litmus
