@@ -64,8 +64,21 @@ func getHost(vcenterServer, hostName, cookie string) (string, string, string, er
 	return hostDetails.MsgValue[0].MsgHost, hostDetails.MsgValue[0].MsgConnectionState, hostDetails.MsgValue[0].MsgPowerState, nil
 }
 
-// GetHostDetails checks if the given host is powered on and connected and later returns the host id
-func GetHostDetails(vcenterServer, hostName, cookie string) (string, error) {
+// GetHostDetails checks if the given host is powered on and connected, and later returns the host id
+func HostStatusCheck(vcenterServer, hostName, datacenter, cookie string) (string, error) {
+
+	if vcenterServer == "" {
+		return "", errors.Errorf("no vcenter server provided, please provide the server url")
+	}
+
+	if hostName == "" {
+		return "", errors.Errorf("no host name provided, please provide the target host name")
+	}
+
+	if datacenter == "" {
+		return "", errors.Errorf("no datacenter provided, please provide the datacenter name of the target host")
+	}
+
 	hostId, connectionState, powerState, err := getHost(vcenterServer, hostName, cookie)
 	if err != nil {
 		return "", err
@@ -73,7 +86,9 @@ func GetHostDetails(vcenterServer, hostName, cookie string) (string, error) {
 
 	if connectionState != "CONNECTED" {
 		return "", errors.Errorf("host not in CONNECTED state")
-	} else if powerState != "POWERED_ON" {
+	}
+
+	if powerState != "POWERED_ON" {
 		return "", errors.Errorf("host not in POWERED_ON state")
 	}
 
