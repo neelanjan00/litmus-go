@@ -42,7 +42,9 @@ func PrepareHostReboot(experimentsDetails *experimentTypes.ExperimentDetails, ho
 
 	// Reboot the host
 	log.Info("[Chaos]: Rebooting the ESX host")
-	vmware.RebootHost(experimentsDetails.HostName, experimentsDetails.HostDatacenter)
+	if err := vmware.RebootHost(experimentsDetails.HostName, experimentsDetails.HostDatacenter); err != nil {
+		return errors.Errorf("failed to start host reboot: %s", err.Error())
+	}
 
 	// Wait for the host to completely reboot
 	log.Info("[Wait]: Wait for the host to completely reboot")
