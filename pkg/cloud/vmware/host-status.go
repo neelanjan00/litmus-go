@@ -101,6 +101,7 @@ func HostStatusCheck(vcenterServer, hostName, datacenter, cookie string) (string
 
 // GetHostConnectionStatus returns the connection status of the given host i.e. CONNECTED, DISCONNECTED, or NOT_RESPONDING
 func GetHostConnectionStatus(vcenterServer, hostName, cookie string) (string, error) {
+
 	_, connectionState, _, err := getHost(vcenterServer, hostName, cookie)
 	if err != nil {
 		return "", err

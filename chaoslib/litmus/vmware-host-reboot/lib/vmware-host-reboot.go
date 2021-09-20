@@ -1,6 +1,8 @@
 package lib
 
 import (
+	"os"
+
 	clients "github.com/litmuschaos/litmus-go/pkg/clients"
 	"github.com/litmuschaos/litmus-go/pkg/cloud/vmware"
 	"github.com/litmuschaos/litmus-go/pkg/log"
@@ -39,6 +41,12 @@ func PrepareHostReboot(experimentsDetails *experimentTypes.ExperimentDetails, ho
 
 		VMDisks[vmId] = diskIdList
 	}
+
+	// Set the ENVs for govc
+	os.Setenv("GOVC_URL", experimentsDetails.VcenterServer)
+	os.Setenv("GOVC_USERNAME", experimentsDetails.VcenterUser)
+	os.Setenv("GOVC_PASSWORD", experimentsDetails.VcenterPass)
+	os.Setenv("GOVC_INSECURE", "true")
 
 	// Reboot the host
 	log.Info("[Chaos]: Rebooting the ESX host")
