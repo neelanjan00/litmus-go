@@ -61,6 +61,10 @@ func getHost(vcenterServer, hostName, cookie string) (string, string, string, er
 	var hostDetails Host
 	json.Unmarshal(body, &hostDetails)
 
+	if len(hostDetails.MsgValue) == 0 {
+		return "", "", "", errors.Errorf("%s host not found", hostName)
+	}
+
 	return hostDetails.MsgValue[0].MsgHost, hostDetails.MsgValue[0].MsgConnectionState, hostDetails.MsgValue[0].MsgPowerState, nil
 }
 
