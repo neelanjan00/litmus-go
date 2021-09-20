@@ -10,24 +10,25 @@ import (
 	"github.com/pkg/errors"
 )
 
-func PrepareChaos(experimentsDetails *experimentTypes.ExperimentDetails, hostId, cookie string, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
+// PrepareHostReboot executes the chaos prepration, injection, and revert steps
+func PrepareHostReboot(experimentsDetails *experimentTypes.ExperimentDetails, hostId, cookie string, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	VMDisks := make(map[string][]string)
 
-	//Waiting for the ramp time before chaos injection
+	// Waiting for the ramp time before chaos injection
 	if experimentsDetails.RampTime != 0 {
 		log.Infof("[Ramp]: Waiting for the %vs ramp time before injecting chaos", experimentsDetails.RampTime)
 		common.WaitForDuration(experimentsDetails.RampTime)
 	}
 
-	//Get the ids of the VMs that are attached to the host and are powered-on and powered-off or suspended
+	// Get the ids of the VMs that are attached to the host and are powered-on and powered-off or suspended
 	log.Infof("[Info]: Fetching the VMs attached to the host")
 	poweredOnVMList, poweredOffOrSuspendedVMList, err := vmware.GetVMDetails(experimentsDetails.VcenterServer, hostId, cookie)
 	if err != nil {
 		return errors.Errorf("failed to fetch the VM details: %s", err.Error())
 	}
 
-	//Get the disks attached to the VMs
+	// Get the disks attached to the VMs
 	log.Infof("[Info]: Fetching the disks attached to the VMs that are attached to the host")
 	for _, vmId := range append(poweredOnVMList, poweredOffOrSuspendedVMList...) {
 
@@ -39,18 +40,19 @@ func PrepareChaos(experimentsDetails *experimentTypes.ExperimentDetails, hostId,
 		VMDisks[vmId] = diskIdList
 	}
 
-	//Reboot the host
+	// Reboot the host
 	log.Info("[Chaos]: Rebooting the ESX host")
 	vmware.RebootHost(experimentsDetails.HostName, experimentsDetails.HostDatacenter)
 
-	//Wait for the host to completely reboot
+	// Wait for the host to completely reboot
 	log.Info("[Wait]: Wait for the host to completely reboot")
 	if err := vmware.WaitForHostReboot(experimentsDetails.Timeout, experimentsDetails.Delay, experimentsDetails.VcenterServer, experimentsDetails.HostName, cookie); err != nil {
 		return errors.Errorf("host failed to successfully reboot: %s", err.Error())
 	}
 
-	//Power-on the VMs that were powered-on prior to the host reboot
+	// Power-on the VMs that were powered-on prior to the host reboot
 	for _, vmId := range poweredOnVMList {
+
 		log.Infof("[Info]: Starting the %s VM", vmId)
 		if err := vmware.StartVM(experimentsDetails.VcenterServer, vmId, cookie); err != nil {
 			return errors.Errorf("failed to start the %s vm, %s", vmId, err.Error())
@@ -62,8 +64,9 @@ func PrepareChaos(experimentsDetails *experimentTypes.ExperimentDetails, hostId,
 		}
 	}
 
-	//Check if the disks are still attached to their respective VMs
+	// Check if the disks are still attached to their respective VMs
 	for vmId, diskList := range VMDisks {
+
 		log.Infof("[Info]: Checking the attachment status of the disks of the %s vm", vmId)
 		for _, diskId := range diskList {
 
@@ -78,7 +81,7 @@ func PrepareChaos(experimentsDetails *experimentTypes.ExperimentDetails, hostId,
 		}
 	}
 
-	//Waiting for the ramp time after chaos injection
+	// Waiting for the ramp time after chaos injection
 	if experimentsDetails.RampTime != 0 {
 		log.Infof("[Ramp]: Waiting for the %vs ramp time after injecting chaos", experimentsDetails.RampTime)
 		common.WaitForDuration(experimentsDetails.RampTime)

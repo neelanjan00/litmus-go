@@ -27,9 +27,9 @@ func VMWareHostReboot(clients clients.ClientSets) {
 	eventsDetails := types.EventDetails{}
 	chaosDetails := types.ChaosDetails{}
 
-	//Fetching all the ENV passed from the runner pod
-	log.Infof("[PreReq]: Getting the ENV for the %v experiment", experimentsDetails.ExperimentName)
+	// Fetching all the ENVs passed from the runner pod
 	experimentEnv.GetENV(&experimentsDetails)
+	log.Infof("[PreReq]: Fetched the ENVs for %v experiment", experimentsDetails.ExperimentName)
 
 	// Intialise the chaos attributes
 	experimentEnv.InitialiseChaosVariables(&chaosDetails, &experimentsDetails)
@@ -45,7 +45,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 		}
 	}
 
-	//Updating the chaos result in the beginning of experiment
+	// Updating the chaos result in the beginning of experiment
 	log.Infof("[PreReq]: Updating the chaos result of %v experiment (SOT)", experimentsDetails.ExperimentName)
 	if err = result.ChaosResult(&chaosDetails, clients, &resultDetails, "SOT"); err != nil {
 		log.Errorf("Unable to Create the Chaos Result, err: %v", err)
@@ -65,14 +65,14 @@ func VMWareHostReboot(clients clients.ClientSets) {
 	// Calling AbortWatcher go routine, it will continuously watch for the abort signal and generate the required events and result
 	go common.AbortWatcher(experimentsDetails.ExperimentName, clients, &resultDetails, &chaosDetails, &eventsDetails)
 
-	//DISPLAY THE APP INFORMATION
+	// DISPLAY THE APP INFORMATION
 	log.InfoWithValues("[Info]: The application information is as follows", logrus.Fields{
 		"Namespace": experimentsDetails.AppNS,
 		"Label":     experimentsDetails.AppLabel,
 		"Ramp Time": experimentsDetails.RampTime,
 	})
 
-	//DISPLAY THE HOST INFORMATION
+	// DISPLAY THE HOST INFORMATION
 	log.InfoWithValues("The host information is as follows", logrus.Fields{
 		"Host Name":       experimentsDetails.HostName,
 		"Host Datacenter": experimentsDetails.HostDatacenter,
@@ -87,7 +87,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 		return
 	}
 
-	//PRE-CHAOS APPLICATION STATUS CHECK
+	// PRE-CHAOS APPLICATION STATUS CHECK
 	log.Info("[Status]: Verify that the AUT (Application Under Test) is running (pre-chaos)")
 	if err = status.AUTStatusCheck(experimentsDetails.AppNS, experimentsDetails.AppLabel, experimentsDetails.TargetContainer, experimentsDetails.Timeout, experimentsDetails.Delay, clients, &chaosDetails); err != nil {
 		log.Errorf("Application status check failed, err: %v", err)
@@ -96,7 +96,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 		return
 	}
 
-	//PRE-CHAOS AUXILIARY APPLICATION STATUS CHECK
+	// PRE-CHAOS AUXILIARY APPLICATION STATUS CHECK
 	if experimentsDetails.AuxiliaryAppInfo != "" {
 		log.Info("[Status]: Verify that the Auxiliary Applications are running (pre-chaos)")
 		if err = status.CheckAuxiliaryApplicationStatus(experimentsDetails.AuxiliaryAppInfo, experimentsDetails.Timeout, experimentsDetails.Delay, clients); err != nil {
@@ -107,7 +107,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 		}
 	}
 
-	//Verify that the host is powered-on and connected (pre-chaos)
+	// Verify that the host is powered-on and connected and if so, get the host id (pre-chaos)
 	if hostId, err = vmware.GetHostDetails(experimentsDetails.VcenterServer, experimentsDetails.HostName, cookie); err != nil {
 		log.Errorf("failed to get the host status, err: %v", err)
 		failStep := "Verify the host status (pre-chaos)"
@@ -141,7 +141,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 	// Including the litmus lib
 	switch experimentsDetails.ChaosLib {
 	case "litmus":
-		if err := litmusLIB.PrepareChaos(&experimentsDetails, hostId, cookie, clients, &resultDetails, &eventsDetails, &chaosDetails); err != nil {
+		if err := litmusLIB.PrepareHostReboot(&experimentsDetails, hostId, cookie, clients, &resultDetails, &eventsDetails, &chaosDetails); err != nil {
 			failStep := "failed in chaos injection phase"
 			result.RecordAfterFailure(&chaosDetails, &resultDetails, failStep, clients, &eventsDetails)
 			log.Errorf("Chaos injection failed, err: %v", err)
@@ -154,7 +154,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 		return
 	}
 
-	//Verify that the host is powered-on and connected (pre-chaos)
+	// Verify that the host is powered-on and connected (post-chaos)
 	if _, err = vmware.GetHostDetails(experimentsDetails.VcenterServer, experimentsDetails.HostName, cookie); err != nil {
 		log.Errorf("failed to get the host status, err: %v", err)
 		failStep := "Verify the host status (pre-chaos)"
@@ -162,7 +162,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 		return
 	}
 
-	//POST-CHAOS APPLICATION STATUS CHECK
+	// POST-CHAOS APPLICATION STATUS CHECK
 	log.Info("[Status]: Verify that the AUT (Application Under Test) is running (post-chaos)")
 	if err = status.AUTStatusCheck(experimentsDetails.AppNS, experimentsDetails.AppLabel, experimentsDetails.TargetContainer, experimentsDetails.Timeout, experimentsDetails.Delay, clients, &chaosDetails); err != nil {
 		log.Errorf("Application status check failed, err: %v", err)
@@ -171,7 +171,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 		return
 	}
 
-	//POST-CHAOS AUXILIARY APPLICATION STATUS CHECK
+	// POST-CHAOS AUXILIARY APPLICATION STATUS CHECK
 	if experimentsDetails.AuxiliaryAppInfo != "" {
 		log.Info("[Status]: Verify that the Auxiliary Applications are running (post-chaos)")
 		if err = status.CheckAuxiliaryApplicationStatus(experimentsDetails.AuxiliaryAppInfo, experimentsDetails.Timeout, experimentsDetails.Delay, clients); err != nil {
@@ -205,7 +205,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 		events.GenerateEvents(&eventsDetails, clients, &chaosDetails, "ChaosEngine")
 	}
 
-	//Updating the chaosResult in the end of experiment
+	// Updating the chaosResult in the end of experiment
 	log.Infof("[The End]: Updating the chaos result of %v experiment (EOT)", experimentsDetails.ExperimentName)
 	if err = result.ChaosResult(&chaosDetails, clients, &resultDetails, "EOT"); err != nil {
 		log.Errorf("Unable to Update the Chaos Result, err: %v", err)
