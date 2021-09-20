@@ -46,7 +46,11 @@ func PrepareHostReboot(experimentsDetails *experimentTypes.ExperimentDetails, ho
 
 	// Wait for the host to completely reboot
 	log.Info("[Wait]: Wait for the host to completely reboot")
-	if err := vmware.WaitForHostReboot(experimentsDetails.Timeout, experimentsDetails.Delay, experimentsDetails.VcenterServer, experimentsDetails.HostName, cookie); err != nil {
+	if err := vmware.WaitForHostToDisconnect(experimentsDetails.Timeout, experimentsDetails.Delay, experimentsDetails.VcenterServer, experimentsDetails.HostName, cookie); err != nil {
+		return errors.Errorf("host failed to successfully reboot: %s", err.Error())
+	}
+
+	if err := vmware.WaitForHostToConnect(experimentsDetails.Timeout, experimentsDetails.Delay, experimentsDetails.VcenterServer, experimentsDetails.HostName, cookie); err != nil {
 		return errors.Errorf("host failed to successfully reboot: %s", err.Error())
 	}
 

@@ -40,21 +40,48 @@ func RebootHost(hostName, datacenter string) error {
 	return nil
 }
 
-// WaitForHostReboot will wait for the host to attain the CONNECTED status
-func WaitForHostReboot(timeout, delay int, vcenterServer, hostName, cookie string) error {
+// WaitForHostToDisconnect will wait for the host to attain the NOT_RESPONDING status
+func WaitForHostToDisconnect(timeout, delay int, vcenterServer, hostName, cookie string) error {
+
 	log.Info("[Status]: Checking host connection status")
 	return retry.Times(uint(timeout / delay)).
 		Wait(time.Duration(delay) * time.Second).
 		Try(func(attempt uint) error {
+
 			hostState, err := GetHostConnectionStatus(vcenterServer, hostName, cookie)
 			if err != nil {
 				return errors.Errorf("failed to get the host connection status: %s", err.Error())
 			}
+
+			if hostState != "NOT_RESPONDING" {
+				log.Infof("[Info]: The host connection state is %s", hostState)
+				return errors.Errorf("host is not yet in NOT_RESPONDING state")
+			}
+
+			log.Infof("[Info]: The host connection state is %s", hostState)
+			return nil
+		})
+}
+
+// WaitForHostToConnect will wait for the host to attain the CONNECTED status
+func WaitForHostToConnect(timeout, delay int, vcenterServer, hostName, cookie string) error {
+
+	log.Info("[Status]: Checking host connection status")
+	return retry.Times(uint(timeout / delay)).
+		Wait(time.Duration(delay) * time.Second).
+		Try(func(attempt uint) error {
+
+			hostState, err := GetHostConnectionStatus(vcenterServer, hostName, cookie)
+			if err != nil {
+				return errors.Errorf("failed to get the host connection status: %s", err.Error())
+			}
+
 			if hostState != "CONNECTED" {
-				log.Infof("The host connection state is %s", hostState)
+				log.Infof("[Info]: The host connection state is %s", hostState)
 				return errors.Errorf("host is not yet in CONNECTED state")
 			}
-			log.Infof("The host connection state is %s", hostState)
+
+			log.Infof("[Info]: The host connection state is %s", hostState)
 			return nil
 		})
 }
