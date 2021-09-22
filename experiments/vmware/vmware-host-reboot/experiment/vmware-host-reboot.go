@@ -108,7 +108,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 	}
 
 	// Verify that the host is powered-on and connected and if so, get the host id (pre-chaos)
-	if hostId, err = vmware.HostStatusCheck(experimentsDetails.VcenterServer, experimentsDetails.HostName, experimentsDetails.HostDatacenter, cookie); err != nil {
+	if hostId, err = vmware.HostStatusCheck(experimentsDetails.VcenterServer, experimentsDetails.HostName, experimentsDetails.HostDatacenter, experimentsDetails.HighAvailabilityCluster, cookie); err != nil {
 		log.Errorf("failed to get the host status, err: %v", err)
 		failStep := "Verify the host status (pre-chaos)"
 		result.RecordAfterFailure(&chaosDetails, &resultDetails, failStep, clients, &eventsDetails)
@@ -155,7 +155,7 @@ func VMWareHostReboot(clients clients.ClientSets) {
 	}
 
 	// Verify that the host is powered-on and connected (post-chaos)
-	if _, err = vmware.HostStatusCheck(experimentsDetails.VcenterServer, experimentsDetails.HostName, experimentsDetails.HostDatacenter, cookie); err != nil {
+	if _, err = vmware.HostStatusCheck(experimentsDetails.VcenterServer, experimentsDetails.HostName, experimentsDetails.HostDatacenter, experimentsDetails.HighAvailabilityCluster, cookie); err != nil {
 		log.Errorf("failed to get the host status, err: %v", err)
 		failStep := "Verify the host status (pre-chaos)"
 		result.RecordAfterFailure(&chaosDetails, &resultDetails, failStep, clients, &eventsDetails)

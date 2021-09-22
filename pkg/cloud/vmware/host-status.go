@@ -69,7 +69,7 @@ func getHost(vcenterServer, hostName, cookie string) (string, string, string, er
 }
 
 // GetHostDetails checks if the given host is powered on and connected, and later returns the host id
-func HostStatusCheck(vcenterServer, hostName, datacenter, cookie string) (string, error) {
+func HostStatusCheck(vcenterServer, hostName, datacenter, highAvailabilityCluster, cookie string) (string, error) {
 
 	if vcenterServer == "" {
 		return "", errors.Errorf("no vcenter server provided, please provide the server url")
@@ -81,6 +81,10 @@ func HostStatusCheck(vcenterServer, hostName, datacenter, cookie string) (string
 
 	if datacenter == "" {
 		return "", errors.Errorf("no datacenter provided, please provide the datacenter name of the target host")
+	}
+
+	if highAvailabilityCluster != "enable" && highAvailabilityCluster != "disable" {
+		return "", errors.Errorf("invalid value for HIGH_AVAILABILITY_CLUSTER: %s", highAvailabilityCluster)
 	}
 
 	hostId, connectionState, powerState, err := getHost(vcenterServer, hostName, cookie)
