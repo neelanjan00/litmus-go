@@ -2,6 +2,7 @@ package lib
 
 import (
 	"os"
+	"strings"
 
 	clients "github.com/litmuschaos/litmus-go/pkg/clients"
 	"github.com/litmuschaos/litmus-go/pkg/cloud/vmware"
@@ -64,18 +65,35 @@ func PrepareHostReboot(experimentsDetails *experimentTypes.ExperimentDetails, ho
 		return errors.Errorf("host failed to successfully reboot: %s", err.Error())
 	}
 
-	// Power-on the VMs that were powered-on prior to the host reboot
-	for _, vmId := range poweredOnVMList {
+	switch strings.ToLower(experimentsDetails.HighAvailabilityCluster) {
 
-		log.Infof("[Info]: Starting the %s VM", vmId)
-		if err := vmware.StartVM(experimentsDetails.VcenterServer, vmId, cookie); err != nil {
-			return errors.Errorf("failed to start the %s vm, %s", vmId, err.Error())
+	case "disable":
+		// Power-on the VMs that were powered-on prior to the host reboot
+		for _, vmId := range poweredOnVMList {
+
+			log.Infof("[Info]: Starting the %s VM", vmId)
+			if err := vmware.StartVM(experimentsDetails.VcenterServer, vmId, cookie); err != nil {
+				return errors.Errorf("failed to start the %s vm, %s", vmId, err.Error())
+			}
+
+			log.Infof("[Wait]: Wait for the %s VM to start", vmId)
+			if err := vmware.WaitForVMStart(experimentsDetails.Timeout, experimentsDetails.Delay, experimentsDetails.VcenterServer, vmId, cookie); err != nil {
+				return errors.Errorf("%s vm failed to successfully start, %s", vmId, err.Error())
+			}
 		}
 
-		log.Infof("[Wait]: Wait for the %s VM to start", vmId)
-		if err := vmware.WaitForVMStart(experimentsDetails.Timeout, experimentsDetails.Delay, experimentsDetails.VcenterServer, vmId, cookie); err != nil {
-			return errors.Errorf("%s vm failed to successfully start, %s", vmId, err.Error())
+	case "enable":
+		//Wait for the VMs that were powered-on prior to the host reboot to power-on by themselves
+		for _, vmId := range poweredOnVMList {
+
+			log.Infof("[Wait]: Wait for the %s VM to start", vmId)
+			if err := vmware.WaitForVMStart(experimentsDetails.Timeout, experimentsDetails.Delay, experimentsDetails.VcenterServer, vmId, cookie); err != nil {
+				return errors.Errorf("%s vm failed to successfully start, %s", vmId, err.Error())
+			}
 		}
+
+	default:
+		return errors.Errorf("%s value for HIGH_AVAILABILITY_CLUSTER is not supported", experimentsDetails.HighAvailabilityCluster)
 	}
 
 	// Check if the disks are still attached to their respective VMs

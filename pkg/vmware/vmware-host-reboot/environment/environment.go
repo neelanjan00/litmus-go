@@ -31,6 +31,7 @@ func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.AuxiliaryAppInfo = common.Getenv("AUXILIARY_APPINFO", "")
 	experimentDetails.HostName = common.Getenv("HOST_NAME", "")
 	experimentDetails.HostDatacenter = common.Getenv("HOST_DATACENTER", "")
+	experimentDetails.HighAvailabilityCluster = common.Getenv("HIGH_AVAILABILITY_CLUSTER", "disable")
 	experimentDetails.VcenterServer = common.Getenv("VCENTERSERVER", "")
 	experimentDetails.VcenterUser = common.Getenv("VCENTERUSER", "")
 	experimentDetails.VcenterPass = common.Getenv("VCENTERPASS", "")

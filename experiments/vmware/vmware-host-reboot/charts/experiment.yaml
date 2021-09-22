@@ -76,8 +76,12 @@ spec:
 
     # set the datacenter of the target host
     - name: HOST_DATACENTER
-      value: ''    
-      
+      value: ''
+
+    # enable if the host belongs to a high availability cluster; defaults to disable
+    - name: HIGH_AVAILABILITY_CLUSTER
+      value: ''
+
     labels:
       name: vmware-host-reboot
       app.kubernetes.io/part-of: litmus
