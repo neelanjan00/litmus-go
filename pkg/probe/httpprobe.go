@@ -13,13 +13,13 @@ import (
 	"net/http"
 
 	"github.com/litmuschaos/chaos-operator/api/litmuschaos/v1alpha1"
+	"github.com/litmuschaos/litmus-go/pkg/cerrors"
 	"github.com/litmuschaos/litmus-go/pkg/clients"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/math"
 	cmp "github.com/litmuschaos/litmus-go/pkg/probe/comparator"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/retry"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -39,7 +39,7 @@ func prepareHTTPProbe(probe v1alpha1.ProbeAttributes, clients clients.ClientSets
 	case "duringchaos":
 		onChaosHTTPProbe(probe, resultDetails, clients, chaosDetails)
 	default:
-		return errors.Errorf("phase '%s' not supported in the http probe", phase)
+		return cerrors.Error{ErrorCode: cerrors.ErrorTypeHttpProbe, Target: fmt.Sprintf("{name: %v}", probe.Name), Reason: fmt.Sprintf("phase '%s' not supported in the http probe", phase)}
 	}
 	return nil
 }
@@ -107,16 +107,18 @@ func getHTTPMethodType(httpMethod v1alpha1.HTTPMethod) string {
 
 // httpGet send the http Get request to the given URL and verify the response code to follow the specified criteria
 func httpGet(probe v1alpha1.ProbeAttributes, client *http.Client, resultDetails *types.ResultDetails) error {
+	var description string
+
 	// it will retry for some retry count, in each iterations of try it contains following things
 	// it contains a timeout per iteration of retry. if the timeout expires without success then it will go to next try
 	// for a timeout, it will run the command, if it fails wait for the interval and again execute the command until timeout expires
-	return retry.Times(uint(probe.RunProperties.Retry)).
+	if err := retry.Times(uint(probe.RunProperties.Retry)).
 		Wait(time.Duration(probe.RunProperties.Interval) * time.Second).
 		Try(func(attempt uint) error {
 			// getting the response from the given url
 			resp, err := client.Get(probe.HTTPProbeInputs.URL)
 			if err != nil {
-				return err
+				return cerrors.Error{ErrorCode: cerrors.ErrorTypeHttpProbe, Target: fmt.Sprintf("{name: %v}", probe.Name), Reason: err.Error()}
 			}
 
 			code := strconv.Itoa(resp.StatusCode)
@@ -127,29 +129,38 @@ func httpGet(probe v1alpha1.ProbeAttributes, client *http.Client, resultDetails 
 				FirstValue(code).
 				SecondValue(probe.HTTPProbeInputs.Method.Get.ResponseCode).
 				Criteria(probe.HTTPProbeInputs.Method.Get.Criteria).
-				CompareInt(); err != nil {
+				ProbeName(probe.Name).
+				CompareInt(cerrors.ErrorTypeHttpProbe); err != nil {
 				log.Errorf("The %v http probe get method has Failed, err: %v", probe.Name, err)
 				return err
 			}
+			description = fmt.Sprintf("The URL %s did respond with correct status code. Actual and Expected status codes are '%s' and '%s' respectively", probe.HTTPProbeInputs.URL, code, probe.HTTPProbeInputs.Method.Get.ResponseCode)
 			return nil
-		})
+		}); err != nil {
+		return err
+	}
+	setProbeDescription(resultDetails, probe, description)
+	return nil
 }
 
 // httpPost send the http post request to the given URL
 func httpPost(probe v1alpha1.ProbeAttributes, client *http.Client, resultDetails *types.ResultDetails) error {
-	body, err := getHTTPBody(probe.HTTPProbeInputs.Method.Post)
+	body, err := getHTTPBody(probe.HTTPProbeInputs.Method.Post, probe.Name)
 	if err != nil {
 		return err
 	}
-	// it will retry for some retry count, in each iterations of try it contains following things
+
+	var description string
+
+	// it will retry for some retry count, in each iteration of try it contains following things
 	// it contains a timeout per iteration of retry. if the timeout expires without success then it will go to next try
 	// for a timeout, it will run the command, if it fails wait for the interval and again execute the command until timeout expires
-	return retry.Times(uint(probe.RunProperties.Retry)).
+	if err := retry.Times(uint(probe.RunProperties.Retry)).
 		Wait(time.Duration(probe.RunProperties.Interval) * time.Second).
 		Try(func(attempt uint) error {
 			resp, err := client.Post(probe.HTTPProbeInputs.URL, probe.HTTPProbeInputs.Method.Post.ContentType, strings.NewReader(body))
 			if err != nil {
-				return err
+				return cerrors.Error{ErrorCode: cerrors.ErrorTypeHttpProbe, Target: fmt.Sprintf("{name: %v}", probe.Name), Reason: err.Error()}
 			}
 			code := strconv.Itoa(resp.StatusCode)
 			rc := getAndIncrementRunCount(resultDetails, probe.Name)
@@ -159,18 +170,24 @@ func httpPost(probe v1alpha1.ProbeAttributes, client *http.Client, resultDetails
 				FirstValue(code).
 				SecondValue(probe.HTTPProbeInputs.Method.Post.ResponseCode).
 				Criteria(probe.HTTPProbeInputs.Method.Post.Criteria).
-				CompareInt(); err != nil {
+				ProbeName(probe.Name).
+				CompareInt(cerrors.ErrorTypeHttpProbe); err != nil {
 				log.Errorf("The %v http probe post method has Failed, err: %v", probe.Name, err)
 				return err
 			}
+			description = fmt.Sprintf("The URL %s did respond with correct status code. Actual and Expected status codes are '%s' and '%s' respectively", probe.HTTPProbeInputs.URL, code, probe.HTTPProbeInputs.Method.Get.ResponseCode)
 			return nil
-		})
+		}); err != nil {
+		return err
+	}
+	setProbeDescription(resultDetails, probe, description)
+	return nil
 }
 
 // getHTTPBody fetch the http body for the post request
 // It will use body or bodyPath attributes to get the http request body
 // if both are provided, it will use body field
-func getHTTPBody(httpBody v1alpha1.PostMethod) (string, error) {
+func getHTTPBody(httpBody v1alpha1.PostMethod, probeName string) (string, error) {
 
 	if httpBody.Body != "" {
 		return httpBody.Body, nil
@@ -181,7 +198,7 @@ func getHTTPBody(httpBody v1alpha1.PostMethod) (string, error) {
 	if httpBody.BodyPath != "" {
 		command = "cat " + httpBody.BodyPath
 	} else {
-		return "", errors.Errorf("[Probe]: Any one of body or bodyPath is required")
+		return "", cerrors.Error{ErrorCode: cerrors.ErrorTypeHttpProbe, Target: fmt.Sprintf("{name: %v}", probeName), Reason: "[Probe]: Any one of body or bodyPath is required"}
 	}
 
 	var out, errOut bytes.Buffer
@@ -190,7 +207,7 @@ func getHTTPBody(httpBody v1alpha1.PostMethod) (string, error) {
 	cmd.Stdout = &out
 	cmd.Stderr = &errOut
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("unable to run command, err: %v; error output: %v", err, errOut.String())
+		return "", cerrors.Error{ErrorCode: cerrors.ErrorTypeHttpProbe, Target: fmt.Sprintf("{name: %v}", probeName), Reason: fmt.Sprintf("unable to run command, err: %v; error output: %v", err, errOut.String())}
 	}
 	return out.String(), nil
 }
@@ -211,9 +228,11 @@ loop:
 		err = triggerHTTPProbe(probe, chaosresult)
 		// record the error inside the probeDetails, we are maintaining a dedicated variable for the err, inside probeDetails
 		if err != nil {
+			err = addProbePhase(err, string(chaosDetails.Phase))
 			for index := range chaosresult.ProbeDetails {
 				if chaosresult.ProbeDetails[index].Name == probe.Name {
 					chaosresult.ProbeDetails[index].IsProbeFailedWithError = err
+					chaosresult.ProbeDetails[index].Status.Description = getDescription(err)
 					log.Errorf("The %v http probe has been Failed, err: %v", probe.Name, err)
 					isExperimentFailed = true
 					break loop
@@ -228,12 +247,12 @@ loop:
 	// and failed the experiment in the end
 	if isExperimentFailed && probe.RunProperties.StopOnFailure {
 		if err := stopChaosEngine(probe, clients, chaosresult, chaosDetails); err != nil {
-			log.Errorf("unable to patch chaosengine to stop, err: %v", err)
+			log.Errorf("Unable to patch chaosengine to stop, err: %v", err)
 		}
 	}
 }
 
-//preChaosHTTPProbe trigger the http probe for prechaos phase
+// preChaosHTTPProbe trigger the http probe for prechaos phase
 func preChaosHTTPProbe(probe v1alpha1.ProbeAttributes, resultDetails *types.ResultDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails) error {
 
 	switch probe.Mode {
@@ -276,7 +295,7 @@ func preChaosHTTPProbe(probe v1alpha1.ProbeAttributes, resultDetails *types.Resu
 	return nil
 }
 
-//postChaosHTTPProbe trigger the http probe for postchaos phase
+// postChaosHTTPProbe trigger the http probe for postchaos phase
 func postChaosHTTPProbe(probe v1alpha1.ProbeAttributes, resultDetails *types.ResultDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails) error {
 
 	switch probe.Mode {
@@ -343,9 +362,11 @@ loop:
 			err = triggerHTTPProbe(probe, chaosresult)
 			// record the error inside the probeDetails, we are maintaining a dedicated variable for the err, inside probeDetails
 			if err != nil {
+				err = addProbePhase(err, string(chaosDetails.Phase))
 				for index := range chaosresult.ProbeDetails {
 					if chaosresult.ProbeDetails[index].Name == probe.Name {
 						chaosresult.ProbeDetails[index].IsProbeFailedWithError = err
+						chaosresult.ProbeDetails[index].Status.Description = getDescription(err)
 						isExperimentFailed = true
 						break loop
 					}
@@ -366,7 +387,7 @@ loop:
 	}
 }
 
-//onChaosHTTPProbe trigger the http probe for DuringChaos phase
+// onChaosHTTPProbe trigger the http probe for DuringChaos phase
 func onChaosHTTPProbe(probe v1alpha1.ProbeAttributes, resultDetails *types.ResultDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails) {
 
 	switch probe.Mode {

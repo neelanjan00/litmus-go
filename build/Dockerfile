@@ -1,6 +1,6 @@
 # Multi-stage docker build
 # Build stage
-FROM golang:1.17 AS builder
+FROM golang:1.18 AS builder
 
 ARG TARGETOS=linux
 ARG TARGETARCH
@@ -31,7 +31,8 @@ FROM litmuschaos/experiment-alpine
 LABEL maintainer="LitmusChaos"
 
 COPY --from=builder /output/ /litmus
-COPY --from=dep /usr/bin/sudo /usr/bin/
+COPY --from=dep /usr/bin/sudo /usr/bin/sudo
+COPY --from=dep /usr/lib/sudo /usr/lib/sudo
 COPY --from=dep /sbin/tc /sbin/
 COPY --from=dep /sbin/iptables /sbin/
 

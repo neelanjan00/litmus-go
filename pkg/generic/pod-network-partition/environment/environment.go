@@ -16,7 +16,6 @@ func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.EngineName = types.Getenv("CHAOSENGINE", "")
 	experimentDetails.ChaosDuration, _ = strconv.Atoi(types.Getenv("TOTAL_CHAOS_DURATION", "30"))
 	experimentDetails.RampTime, _ = strconv.Atoi(types.Getenv("RAMP_TIME", "0"))
-	experimentDetails.ChaosLib = types.Getenv("LIB", "litmus")
 	experimentDetails.AppNS = types.Getenv("APP_NAMESPACE", "")
 	experimentDetails.AppLabel = types.Getenv("APP_LABEL", "")
 	experimentDetails.AppKind = types.Getenv("APP_KIND", "")
@@ -34,4 +33,14 @@ func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.NamespaceSelector = types.Getenv("NAMESPACE_SELECTOR", "")
 	experimentDetails.PORTS = types.Getenv("PORTS", "")
 
+	experimentDetails.AppNS, experimentDetails.AppKind, experimentDetails.AppLabel = getAppDetails()
+}
+
+func getAppDetails() (string, string, string) {
+	targets := types.Getenv("TARGETS", "")
+	app := types.GetTargets(targets)
+	if len(app) != 0 {
+		return app[0].Namespace, app[0].Kind, app[0].Labels[0]
+	}
+	return "", "", ""
 }

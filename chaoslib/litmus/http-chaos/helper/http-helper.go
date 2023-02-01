@@ -1,12 +1,13 @@
 package helper
 
 import (
-	"bytes"
 	"fmt"
+	"github.com/litmuschaos/litmus-go/pkg/cerrors"
+	"github.com/palantir/stacktrace"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
-	"github.com/pkg/errors"
 	clientTypes "k8s.io/apimachinery/pkg/types"
 )
 
@@ -48,10 +48,11 @@ func Helper(clients clients.ClientSets) {
 	log.Info("[PreReq]: Getting the ENV variables")
 	getENV(&experimentsDetails)
 
-	// Intialise the chaos attributes
+	// Initialise the chaos attributes
 	types.InitialiseChaosVariables(&chaosDetails)
+	chaosDetails.Phase = types.ChaosInjectPhase
 
-	// Intialise Chaos Result Parameters
+	// Initialise Chaos Result Parameters
 	types.SetResultAttributes(&resultDetails, chaosDetails)
 
 	// Set the chaos result uid
@@ -59,22 +60,67 @@ func Helper(clients clients.ClientSets) {
 
 	err := prepareK8sHttpChaos(&experimentsDetails, clients, &eventsDetails, &chaosDetails, &resultDetails)
 	if err != nil {
+		// update failstep inside chaosresult
+		if resultErr := result.UpdateFailedStepFromHelper(&resultDetails, &chaosDetails, clients, err); resultErr != nil {
+			log.Fatalf("helper pod failed, err: %v, resultErr: %v", err, resultErr)
+		}
 		log.Fatalf("helper pod failed, err: %v", err)
 	}
-
 }
 
-// prepareK8sHttpChaos contains the prepration steps before chaos injection
+// prepareK8sHttpChaos contains the preparation steps before chaos injection
 func prepareK8sHttpChaos(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails, resultDetails *types.ResultDetails) error {
 
-	containerID, err := common.GetRuntimeBasedContainerID(experimentsDetails.ContainerRuntime, experimentsDetails.SocketPath, experimentsDetails.TargetPods, experimentsDetails.AppNS, experimentsDetails.TargetContainer, clients)
+	targetList, err := common.ParseTargets(chaosDetails.ChaosPodName)
 	if err != nil {
-		return err
+		return stacktrace.Propagate(err, "could not parse targets")
 	}
-	// extract out the pid of the target container
-	targetPID, err := common.GetPauseAndSandboxPID(experimentsDetails.ContainerRuntime, containerID, experimentsDetails.SocketPath)
-	if err != nil {
-		return err
+
+	var targets []targetDetails
+
+	for _, t := range targetList.Target {
+		td := targetDetails{
+			Name:            t.Name,
+			Namespace:       t.Namespace,
+			TargetContainer: t.TargetContainer,
+			Source:          chaosDetails.ChaosPodName,
+		}
+
+		td.ContainerId, err = common.GetRuntimeBasedContainerID(experimentsDetails.ContainerRuntime, experimentsDetails.SocketPath, td.Name, td.Namespace, td.TargetContainer, clients, td.Source)
+		if err != nil {
+			return stacktrace.Propagate(err, "could not get container id")
+		}
+
+		// extract out the pid of the target container
+		td.Pid, err = common.GetPauseAndSandboxPID(experimentsDetails.ContainerRuntime, td.ContainerId, experimentsDetails.SocketPath, td.Source)
+		if err != nil {
+			return stacktrace.Propagate(err, "could not get container pid")
+		}
+		targets = append(targets, td)
+	}
+
+	// watching for the abort signal and revert the chaos
+	go abortWatcher(targets, resultDetails.Name, chaosDetails.ChaosNamespace, experimentsDetails)
+
+	select {
+	case <-inject:
+		// stopping the chaos execution, if abort signal received
+		os.Exit(1)
+	default:
+	}
+
+	for _, t := range targets {
+		// injecting http chaos inside target container
+		if err = injectChaos(experimentsDetails, t); err != nil {
+			return stacktrace.Propagate(err, "could not inject chaos")
+		}
+		log.Infof("successfully injected chaos on target: {name: %s, namespace: %v, container: %v}", t.Name, t.Namespace, t.TargetContainer)
+		if err = result.AnnotateChaosResult(resultDetails.Name, chaosDetails.ChaosNamespace, "injected", "pod", t.Name); err != nil {
+			if revertErr := revertChaos(experimentsDetails, t); revertErr != nil {
+				return cerrors.PreserveError{ErrString: fmt.Sprintf("[%s,%s]", stacktrace.RootCause(err).Error(), stacktrace.RootCause(revertErr).Error())}
+			}
+			return stacktrace.Propagate(err, "could not annotate chaosresult")
+		}
 	}
 
 	// record the event inside chaosengine
@@ -84,71 +130,67 @@ func prepareK8sHttpChaos(experimentsDetails *experimentTypes.ExperimentDetails, 
 		events.GenerateEvents(eventsDetails, clients, chaosDetails, "ChaosEngine")
 	}
 
-	// watching for the abort signal and revert the chaos
-	go abortWatcher(targetPID, resultDetails.Name, chaosDetails.ChaosNamespace, experimentsDetails)
-
-	// injecting http chaos inside target container
-	if err = injectChaos(experimentsDetails, targetPID); err != nil {
-		return err
-	}
-
-	if err = result.AnnotateChaosResult(resultDetails.Name, chaosDetails.ChaosNamespace, "injected", "pod", experimentsDetails.TargetPods); err != nil {
-		return err
-	}
-
 	log.Infof("[Chaos]: Waiting for %vs", experimentsDetails.ChaosDuration)
 
 	common.WaitForDuration(experimentsDetails.ChaosDuration)
 
-	log.Info("[Chaos]: Stopping the experiment")
+	log.Info("[Chaos]: chaos duration is over, reverting chaos")
 
-	// cleaning the netem process after chaos injection
-	if err = revertChaos(experimentsDetails, targetPID); err != nil {
-		return err
+	var errList []string
+	for _, t := range targets {
+		// cleaning the ip rules process after chaos injection
+		err := revertChaos(experimentsDetails, t)
+		if err != nil {
+			errList = append(errList, err.Error())
+			continue
+		}
+		if err = result.AnnotateChaosResult(resultDetails.Name, chaosDetails.ChaosNamespace, "reverted", "pod", t.Name); err != nil {
+			errList = append(errList, err.Error())
+		}
 	}
 
-	return result.AnnotateChaosResult(resultDetails.Name, chaosDetails.ChaosNamespace, "reverted", "pod", experimentsDetails.TargetPods)
+	if len(errList) != 0 {
+		return cerrors.PreserveError{ErrString: fmt.Sprintf("[%s]", strings.Join(errList, ","))}
+	}
+	return nil
 }
 
 // injectChaos inject the http chaos in target container and add ruleset to the iptables to redirect the ports
-func injectChaos(experimentDetails *experimentTypes.ExperimentDetails, pid int) error {
-
-	select {
-	case <-inject:
-		// stopping the chaos execution, if abort signal received
-		os.Exit(1)
-	default:
-		// proceed for chaos injection
-		if err := startProxy(experimentDetails, pid); err != nil {
-			_ = killProxy(pid)
-			return errors.Errorf("failed to start proxy, err: %v", err)
+func injectChaos(experimentDetails *experimentTypes.ExperimentDetails, t targetDetails) error {
+	if err := startProxy(experimentDetails, t.Pid); err != nil {
+		killErr := killProxy(t.Pid, t.Source)
+		if killErr != nil {
+			return cerrors.PreserveError{ErrString: fmt.Sprintf("[%s,%s]", stacktrace.RootCause(err).Error(), stacktrace.RootCause(killErr).Error())}
 		}
-		if err := addIPRuleSet(experimentDetails, pid); err != nil {
-			_ = killProxy(pid)
-			return errors.Errorf("failed to add ip rule set, err: %v", err)
+		return stacktrace.Propagate(err, "could not start proxy server")
+	}
+	if err := addIPRuleSet(experimentDetails, t.Pid); err != nil {
+		killErr := killProxy(t.Pid, t.Source)
+		if killErr != nil {
+			return cerrors.PreserveError{ErrString: fmt.Sprintf("[%s,%s]", stacktrace.RootCause(err).Error(), stacktrace.RootCause(killErr).Error())}
 		}
+		return stacktrace.Propagate(err, "could not add ip rules")
 	}
 	return nil
 }
 
 // revertChaos revert the http chaos in target container
-func revertChaos(experimentDetails *experimentTypes.ExperimentDetails, pid int) error {
+func revertChaos(experimentDetails *experimentTypes.ExperimentDetails, t targetDetails) error {
 
-	var revertError error
-	revertError = nil
+	var errList []string
 
-	if err := removeIPRuleSet(experimentDetails, pid); err != nil {
-		revertError = errors.Errorf("failed to remove ip rule set, err: %v", err)
+	if err := removeIPRuleSet(experimentDetails, t.Pid); err != nil {
+		errList = append(errList, err.Error())
 	}
 
-	if err := killProxy(pid); err != nil {
-		if revertError != nil {
-			revertError = errors.Errorf("%v and failed to kill proxy server, err: %v", revertError, err)
-		} else {
-			revertError = errors.Errorf("failed to kill proxy server, err: %v", err)
-		}
+	if err := killProxy(t.Pid, t.Source); err != nil {
+		errList = append(errList, err.Error())
 	}
-	return revertError
+	if len(errList) != 0 {
+		return cerrors.PreserveError{ErrString: fmt.Sprintf("[%s]", strings.Join(errList, ","))}
+	}
+	log.Infof("successfully reverted chaos on target: {name: %s, namespace: %v, container: %v}", t.Name, t.Namespace, t.TargetContainer)
+	return nil
 }
 
 // startProxy starts the proxy process inside the target container
@@ -169,7 +211,7 @@ func startProxy(experimentDetails *experimentTypes.ExperimentDetails, pid int) e
 
 	log.Infof("[Chaos]: Starting proxy server")
 
-	if err := runCommand(chaosCommand); err != nil {
+	if err := common.RunBashCommand(chaosCommand, "failed to start proxy server", experimentDetails.ChaosPodName); err != nil {
 		return err
 	}
 
@@ -177,14 +219,16 @@ func startProxy(experimentDetails *experimentTypes.ExperimentDetails, pid int) e
 	return nil
 }
 
+const NoProxyToKill = "you need to specify whom to kill"
+
 // killProxy kills the proxy process inside the target container
 // it is using nsenter command to enter into network namespace of target container
 // and execute the proxy related command inside it.
-func killProxy(pid int) error {
+func killProxy(pid int, source string) error {
 	stopProxyServerCommand := fmt.Sprintf("sudo nsenter -t %d -n sudo kill -9 $(ps aux | grep [t]oxiproxy | awk 'FNR==1{print $1}')", pid)
 	log.Infof("[Chaos]: Stopping proxy server")
 
-	if err := runCommand(stopProxyServerCommand); err != nil {
+	if err := common.RunBashCommand(stopProxyServerCommand, "failed to stop proxy server", source); err != nil {
 		return err
 	}
 
@@ -202,13 +246,15 @@ func addIPRuleSet(experimentDetails *experimentTypes.ExperimentDetails, pid int)
 	addIPRuleSetCommand := fmt.Sprintf("(sudo nsenter -t %d -n iptables -t nat -I PREROUTING -i %v -p tcp --dport %d -j REDIRECT --to-port %d)", pid, experimentDetails.NetworkInterface, experimentDetails.TargetServicePort, experimentDetails.ProxyPort)
 	log.Infof("[Chaos]: Adding IPtables ruleset")
 
-	if err := runCommand(addIPRuleSetCommand); err != nil {
+	if err := common.RunBashCommand(addIPRuleSetCommand, "failed to add ip rules", experimentDetails.ChaosPodName); err != nil {
 		return err
 	}
 
 	log.Info("[Info]: IP rule set added successfully")
 	return nil
 }
+
+const NoIPRulesetToRemove = "No chain/target/match by that name"
 
 // removeIPRuleSet removes the ip rule set from iptables in target container
 // it is using nsenter command to enter into network namespace of target container
@@ -217,7 +263,7 @@ func removeIPRuleSet(experimentDetails *experimentTypes.ExperimentDetails, pid i
 	removeIPRuleSetCommand := fmt.Sprintf("sudo nsenter -t %d -n iptables -t nat -D PREROUTING -i %v -p tcp --dport %d -j REDIRECT --to-port %d", pid, experimentDetails.NetworkInterface, experimentDetails.TargetServicePort, experimentDetails.ProxyPort)
 	log.Infof("[Chaos]: Removing IPtables ruleset")
 
-	if err := runCommand(removeIPRuleSetCommand); err != nil {
+	if err := common.RunBashCommand(removeIPRuleSetCommand, "failed to remove ip rules", experimentDetails.ChaosPodName); err != nil {
 		return err
 	}
 
@@ -229,10 +275,6 @@ func removeIPRuleSet(experimentDetails *experimentTypes.ExperimentDetails, pid i
 func getENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.ExperimentName = types.Getenv("EXPERIMENT_NAME", "")
 	experimentDetails.InstanceID = types.Getenv("INSTANCE_ID", "")
-	experimentDetails.AppNS = types.Getenv("APP_NAMESPACE", "")
-	experimentDetails.TargetContainer = types.Getenv("APP_CONTAINER", "")
-	experimentDetails.TargetPods = types.Getenv("APP_POD", "")
-	experimentDetails.AppLabel = types.Getenv("APP_LABEL", "")
 	experimentDetails.ChaosDuration, _ = strconv.Atoi(types.Getenv("TOTAL_CHAOS_DURATION", ""))
 	experimentDetails.ChaosNamespace = types.Getenv("CHAOS_NAMESPACE", "litmus")
 	experimentDetails.EngineName = types.Getenv("CHAOSENGINE", "")
@@ -246,27 +288,8 @@ func getENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.Toxicity, _ = strconv.Atoi(types.Getenv("TOXICITY", "100"))
 }
 
-func runCommand(chaosCommand string) error {
-	var stdout, stderr bytes.Buffer
-
-	cmd := exec.Command("/bin/bash", "-c", chaosCommand)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err = cmd.Run()
-	errStr := stderr.String()
-	if err != nil {
-		// if we get standard error then, return the same
-		if errStr != "" {
-			return errors.New(errStr)
-		}
-		// if not standard error found, return error
-		return err
-	}
-	return nil
-}
-
 // abortWatcher continuously watch for the abort signals
-func abortWatcher(targetPID int, resultName, chaosNS string, experimentDetails *experimentTypes.ExperimentDetails) {
+func abortWatcher(targets []targetDetails, resultName, chaosNS string, experimentDetails *experimentTypes.ExperimentDetails) {
 
 	<-abort
 	log.Info("[Abort]: Killing process started because of terminated signal received")
@@ -274,23 +297,31 @@ func abortWatcher(targetPID int, resultName, chaosNS string, experimentDetails *
 
 	retry := 3
 	for retry > 0 {
-		if err = revertChaos(experimentDetails, targetPID); err != nil {
-			retry--
-			// If retries are left
-			if retry > 0 {
-				log.Errorf("[Abort]: Failed to revert chaos, retrying %d more times, err: %v", retry, err)
-				time.Sleep(1 * time.Second)
+		for _, t := range targets {
+			if err = revertChaos(experimentDetails, t); err != nil {
+				if strings.Contains(err.Error(), NoIPRulesetToRemove) && strings.Contains(err.Error(), NoProxyToKill) {
+					continue
+				}
+				log.Errorf("unable to revert for %v pod, err :%v", t.Name, err)
 				continue
 			}
-			// else exit with error
-			log.Errorf("[Abort]: Chaos Revert Failed")
-			os.Exit(1)
+			if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "pod", t.Name); err != nil {
+				log.Errorf("unable to annotate the chaosresult for %v pod, err :%v", t.Name, err)
+			}
 		}
-
-		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "pod", experimentDetails.TargetPods); err != nil {
-			log.Errorf("unable to annotate the chaosresult, err :%v", err)
-		}
-		log.Info("[Abort]: Chaos Revert Completed")
-		os.Exit(1)
+		retry--
+		time.Sleep(1 * time.Second)
 	}
+
+	log.Info("Chaos Revert Completed")
+	os.Exit(1)
+}
+
+type targetDetails struct {
+	Name            string
+	Namespace       string
+	TargetContainer string
+	ContainerId     string
+	Pid             int
+	Source          string
 }

@@ -56,7 +56,7 @@ import (
 	ebsLossByTag "github.com/litmuschaos/litmus-go/experiments/kube-aws/ebs-loss-by-tag/experiment"
 	ec2TerminateByID "github.com/litmuschaos/litmus-go/experiments/kube-aws/ec2-terminate-by-id/experiment"
 	ec2TerminateByTag "github.com/litmuschaos/litmus-go/experiments/kube-aws/ec2-terminate-by-tag/experiment"
-	springBootChaos "github.com/litmuschaos/litmus-go/experiments/spring-boot/spring-boot-chaos/experiment"
+	springBootFaults "github.com/litmuschaos/litmus-go/experiments/spring-boot/spring-boot-faults/experiment"
 	vmpoweroff "github.com/litmuschaos/litmus-go/experiments/vmware/vm-poweroff/experiment"
 
 	"github.com/litmuschaos/litmus-go/pkg/clients"
@@ -182,8 +182,8 @@ func main() {
 		gcpVMInstanceStopByLabel.GCPVMInstanceStopByLabel(clients)
 	case "gcp-vm-disk-loss-by-label":
 		gcpVMDiskLossByLabel.GCPVMDiskLossByLabel(clients)
-	case "spring-boot-chaos":
-		springBootChaos.Experiment(clients)
+	case "spring-boot-cpu-stress", "spring-boot-memory-stress", "spring-boot-exceptions", "spring-boot-app-kill", "spring-boot-faults", "spring-boot-latency":
+		springBootFaults.Experiment(clients, *experimentName)
 	default:
 		log.Errorf("Unsupported -name %v, please provide the correct value of -name args", *experimentName)
 		return
